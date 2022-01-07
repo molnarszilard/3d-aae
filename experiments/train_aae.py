@@ -15,7 +15,9 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 from torch.utils.data import DataLoader
-
+import sys
+sys.path.append('../')
+sys.path.append('./')
 from utils.pcutil import plot_3d_point_cloud
 from utils.util import find_latest_epoch, prepare_results_dir, cuda_setup, setup_logging
 

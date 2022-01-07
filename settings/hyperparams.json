@@ -1,6 +1,6 @@
 {
     "experiment_name": "experiment",
-    "results_root": "/Users/maciek/test-results",
+    "results_root": "datasets/results/",
     "clean_results_dir": false,
 
     "cuda": true,
@@ -12,7 +12,7 @@
     ],
 
     "dataset": "shapenet",
-    "data_dir": "/Users/maciek/shapenet",
+    "data_dir": "datasets/shapenet/",
     "classes": [],
     "shuffle": true,
     "transforms": ["rotate"],
@@ -23,7 +23,7 @@
     "batch_size": 50,
     "gp_lambda": 10,
     "reconstruction_coef": 0.05,
-    "z_size": 2048,
+    "z_size": 256,
     "distribution": "bernoulli",
 
     "p": 0.2,
@@ -37,7 +37,7 @@
     "save_frequency": 5,
     "epsilon": 0.001,
 
-    "arch": "avae",
+    "arch": "aae",
     "model": {
         "D": {
             "dropout": 0.5,

@@ -17,7 +17,9 @@ import torch.utils.data
 from torch.autograd import grad
 from torch.distributions import Bernoulli
 from torch.utils.data import DataLoader
-
+import sys
+sys.path.append('../')
+sys.path.append('./')
 from utils.pcutil import plot_3d_point_cloud
 from utils.util import find_latest_epoch, prepare_results_dir, cuda_setup, setup_logging
 
@@ -248,17 +250,17 @@ def main(config):
             X_rec = G(E(X)).data.cpu().numpy()
             X = X.data.cpu().numpy()
 
-        plt.figure(figsize=(16, 9))
-        plt.plot(loss_d_tot, 'r-', label="loss_d")
-        plt.plot(loss_gp_tot, 'g-', label="loss_gp")
-        plt.plot(loss_e_tot, 'b-', label="loss_e")
-        plt.plot(loss_g_tot, 'k-', label="loss_g")
-        plt.legend()
-        plt.xlabel("Batch number")
-        plt.xlabel("Loss value")
-        plt.savefig(
-            join(results_dir, 'samples', f'loss_plot.png'))
-        plt.close()
+        # plt.figure(figsize=(16, 9))
+        # plt.plot(loss_d_tot, 'r-', label="loss_d")
+        # plt.plot(loss_gp_tot, 'g-', label="loss_gp")
+        # plt.plot(loss_e_tot, 'b-', label="loss_e")
+        # plt.plot(loss_g_tot, 'k-', label="loss_g")
+        # plt.legend()
+        # plt.xlabel("Batch number")
+        # plt.xlabel("Loss value")
+        # plt.savefig(
+        #     join(results_dir, 'samples', f'loss_plot.png'))
+        # plt.close()
 
         for k in range(5):
             fig = plot_3d_point_cloud(X[k][0], X[k][1], X[k][2],

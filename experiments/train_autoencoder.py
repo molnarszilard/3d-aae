@@ -14,10 +14,12 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 from torch.utils.data import DataLoader
-
+import sys
+sys.path.append('../')
+sys.path.append('./')
 from datasets.shapenet import ShapeNetDataset
 from losses.champfer_loss import ChamferLoss
-from losses.earth_mover_distance import EMD
+# from losses.earth_mover_distance import EMD
 from utils.pcutil import plot_3d_point_cloud
 from utils.util import find_latest_epoch, prepare_results_dir, cuda_setup, setup_logging
 
@@ -76,7 +78,7 @@ def main(config):
     #
     # Models
     #
-    arch = import_module(f"model.architectures.{config['arch']}")
+    arch = import_module(f"models.{config['arch']}")
     G = arch.Generator(config).to(device)
     E = arch.Encoder(config).to(device)
 
