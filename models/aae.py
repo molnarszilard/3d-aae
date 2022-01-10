@@ -12,7 +12,7 @@ class Generator(nn.Module):
         self.use_bias = config['model']['G']['use_bias']
         self.relu_slope = config['model']['G']['relu_slope']
         self.model = nn.Sequential(
-            nn.Linear(in_features=1, out_features=64, bias=self.use_bias),
+            nn.Linear(in_features=self.z_size, out_features=64, bias=self.use_bias),
             nn.ReLU(inplace=True),
 
             nn.Linear(in_features=64, out_features=128, bias=self.use_bias),
@@ -44,7 +44,7 @@ class Discriminator(nn.Module):
 
         self.model = nn.Sequential(
 
-            nn.Linear(1, 512, bias=True),
+            nn.Linear(self.z_size, 512, bias=True),
             nn.ReLU(inplace=True),
 
             nn.Linear(512, 512, bias=True),
@@ -60,7 +60,6 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x):
-        print(x.shape)
         logit = self.model(x)
         return logit
 
@@ -70,6 +69,8 @@ class Encoder(nn.Module):
         super().__init__()
 
         self.z_size = config['z_size']
+        self.z_h = config['latent_image_height']
+        self.z_w = config['latent_image_width']
         self.use_bias = config['model']['E']['use_bias']
         self.relu_slope = config['model']['E']['relu_slope']
 
@@ -99,9 +100,14 @@ class Encoder(nn.Module):
             nn.ReLU(inplace=True)
         )
 
+        self.fc2 = nn.Sequential(
+            nn.Linear(self.z_h*self.z_w, self.z_size, bias=True),
+            nn.ReLU(inplace=True)
+        )
+
         self.mu_layer = nn.Linear(256, self.z_size, bias=True)
         self.std_layer = nn.Linear(256, self.z_size, bias=True)
-        self.decoder_input = nn.Linear(in_features=2048, out_features=16384)
+        self.decoder_input = nn.Linear(in_features=self.z_size, out_features=self.z_h*self.z_w)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -123,10 +129,13 @@ class Encoder(nn.Module):
         # do_matrix=nn.Linear(in_features=256, out_features=[256,256])
         # print("before")
         # print(z.shape)
-        decoder_input = self.decoder_input(z).unsqueeze(dim=1).unsqueeze(dim=1)
+        image_format = self.decoder_input(z).unsqueeze(dim=1).unsqueeze(dim=1)
         # print(decoder_input.shape)
-        decoder_input = decoder_input.view(-1, 1, 128, 128)
-
-        # print(decoder_input.shape)
-        return z, mu, logvar
+        image_format = image_format.view(-1, 1, self.z_h, self.z_w)
+        # print(image_format.shape)
+        flattened_input = torch.flatten(image_format, start_dim=1)
+        # print(flattened_input.shape)
+        z=self.fc2(flattened_input)
+        # print(z.shape)
+        return z, mu, logvar, image_format
 

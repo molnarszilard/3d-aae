@@ -153,7 +153,7 @@ def main(config):
             if X.size(-1) == 3:
                 X.transpose_(X.dim() - 2, X.dim() - 1)
 
-            codes, _, _ = E(X)
+            codes, _, _ , _= E(X)
             noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
             synth_logit = D(codes)
             real_logit = D(noise)
@@ -227,7 +227,7 @@ def main(config):
         D.eval()
         with torch.no_grad():
             fake = G(fixed_noise).data.cpu().numpy()
-            codes, _, _ = E(X)
+            codes, _, _ , _= E(X)
             X_rec = G(codes).data.cpu().numpy()
 
         for k in range(5):

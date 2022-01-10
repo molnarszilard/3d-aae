@@ -11,6 +11,8 @@
     "metrics": [
     ],
 
+    "latent_image_height": 128,
+    "latent_image_width": 128,
     "dataset": "shapenet",
     "data_dir": "datasets/shapenet/",
     "classes": [],
