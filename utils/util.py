@@ -43,6 +43,7 @@ def prepare_results_dir(config):
     makedirs(join(output_dir, 'weights'), exist_ok=True)
     makedirs(join(output_dir, 'samples'), exist_ok=True)
     makedirs(join(output_dir, 'results'), exist_ok=True)
+    makedirs(join(output_dir, 'enc_dataset'), exist_ok=True)
     return output_dir
 
 

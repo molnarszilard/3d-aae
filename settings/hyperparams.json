@@ -19,11 +19,11 @@
     "num_workers": 8,
     "n_points": 2048,
 
-    "max_epochs": 2000,
+    "max_epochs": 200,
     "batch_size": 50,
     "gp_lambda": 10,
     "reconstruction_coef": 0.05,
-    "z_size": 256,
+    "z_size": 2048,
     "distribution": "bernoulli",
 
     "p": 0.2,

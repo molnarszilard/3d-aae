@@ -12,7 +12,7 @@ class Generator(nn.Module):
         self.use_bias = config['model']['G']['use_bias']
         self.relu_slope = config['model']['G']['relu_slope']
         self.model = nn.Sequential(
-            nn.Linear(in_features=self.z_size, out_features=64, bias=self.use_bias),
+            nn.Linear(in_features=1, out_features=64, bias=self.use_bias),
             nn.ReLU(inplace=True),
 
             nn.Linear(in_features=64, out_features=128, bias=self.use_bias),
@@ -44,7 +44,7 @@ class Discriminator(nn.Module):
 
         self.model = nn.Sequential(
 
-            nn.Linear(self.z_size, 512, bias=True),
+            nn.Linear(1, 512, bias=True),
             nn.ReLU(inplace=True),
 
             nn.Linear(512, 512, bias=True),
@@ -60,6 +60,7 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x):
+        print(x.shape)
         logit = self.model(x)
         return logit
 
@@ -100,6 +101,7 @@ class Encoder(nn.Module):
 
         self.mu_layer = nn.Linear(256, self.z_size, bias=True)
         self.std_layer = nn.Linear(256, self.z_size, bias=True)
+        self.decoder_input = nn.Linear(in_features=2048, out_features=16384)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -108,10 +110,23 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         output = self.conv(x)
+        # print(x.shape)
+        # print(output.shape)
         output2 = output.max(dim=2)[0]
+        # print(output2.shape)
         logit = self.fc(output2)
+        # print(logit.shape)
         mu = self.mu_layer(logit)
+        # print(mu.shape)
         logvar = self.std_layer(logit)
         z = self.reparameterize(mu, logvar)
+        # do_matrix=nn.Linear(in_features=256, out_features=[256,256])
+        # print("before")
+        # print(z.shape)
+        decoder_input = self.decoder_input(z).unsqueeze(dim=1).unsqueeze(dim=1)
+        # print(decoder_input.shape)
+        decoder_input = decoder_input.view(-1, 1, 128, 128)
+
+        # print(decoder_input.shape)
         return z, mu, logvar
 

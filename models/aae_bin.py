@@ -99,8 +99,10 @@ class Encoder(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
+        # print(x.shape)
         output = self.conv(x)
         output2 = output.max(dim=2)[0]
         logit = self.fc(output2)
         z = self.sigmoid(logit)
+        # print(z.shape)
         return z
