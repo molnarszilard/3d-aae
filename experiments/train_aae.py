@@ -16,6 +16,8 @@ import torch.optim as optim
 import torch.utils.data
 from torch.utils.data import DataLoader
 import sys
+import cv2
+import numpy as np
 sys.path.append('../')
 sys.path.append('./')
 from utils.pcutil import plot_3d_point_cloud
@@ -227,8 +229,13 @@ def main(config):
         D.eval()
         with torch.no_grad():
             fake = G(fixed_noise).data.cpu().numpy()
-            codes, _, _ , _= E(X)
+            codes, _, _ , latentrgb= E(X)
             X_rec = G(codes).data.cpu().numpy()
+            # print(latentrgb.shape)
+            # latentrgb=latentrgb*255/latentrgb.max()
+            # print(latentrgb.max())
+            latentrgb2np = latentrgb.squeeze(dim=0).cpu().detach().numpy()         
+            
 
         for k in range(5):
             fig = plot_3d_point_cloud(X[k][0], X[k][1], X[k][2],
@@ -237,6 +244,17 @@ def main(config):
             fig.savefig(
                 join(results_dir, 'samples', f'{epoch:05}_{k}_real.png'))
             plt.close(fig)
+
+        for k in range(5):
+            latentrgb2npk=latentrgb2np[k]
+            latentrgb2npk=latentrgb2npk*255/latentrgb2npk.max()
+            # print(latentrgb2npk.shape)
+            latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
+            # print(latentrgb2npk.shape)
+            # im = Image.fromarray(latentrgb2np)
+            path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
+            # print(path)
+            cv2.imwrite(path,latentrgb2npk)
 
         for k in range(5):
             fig = plot_3d_point_cloud(fake[k][0], fake[k][1], fake[k][2],

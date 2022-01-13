@@ -101,13 +101,14 @@ class Encoder(nn.Module):
         )
 
         self.fc2 = nn.Sequential(
-            nn.Linear(self.z_h*self.z_w, self.z_size, bias=True),
+            nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True),
             nn.ReLU(inplace=True)
         )
 
         self.mu_layer = nn.Linear(256, self.z_size, bias=True)
         self.std_layer = nn.Linear(256, self.z_size, bias=True)
         self.decoder_input = nn.Linear(in_features=self.z_size, out_features=self.z_h*self.z_w)
+        self.decoder_inputrgb = nn.Conv1d(in_channels=1, out_channels=3, kernel_size=[1,1])
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -133,9 +134,11 @@ class Encoder(nn.Module):
         # print(decoder_input.shape)
         image_format = image_format.view(-1, 1, self.z_h, self.z_w)
         # print(image_format.shape)
-        flattened_input = torch.flatten(image_format, start_dim=1)
+        imagergb = self.decoder_inputrgb(image_format)
+        # print(imagergb.shape)
+        flattened_input = torch.flatten(imagergb, start_dim=1)
         # print(flattened_input.shape)
         z=self.fc2(flattened_input)
         # print(z.shape)
-        return z, mu, logvar, image_format
+        return z, mu, logvar, imagergb
 

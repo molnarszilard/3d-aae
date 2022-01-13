@@ -17,6 +17,7 @@ import torch.utils.data
 from torch.utils.data import DataLoader
 import sys
 import numpy as np
+import cv2
 sys.path.append('../')
 sys.path.append('./')
 from utils.util import find_latest_epoch, prepare_results_dir, cuda_setup, setup_logging
@@ -102,13 +103,21 @@ def main(config):
                 X.transpose_(X.dim() - 2, X.dim() - 1)
         E.eval()
         with torch.no_grad():
-            _, _, _, codes = E(X)
+            _, _, _, latentrgb = E(X)
         bs = config['batch_size']
         for j in range(bs):
             nr = (i-1)*bs+j
             # print(codes[j].squeeze(dim=0).shape)
-            np.save(join(results_dir, 'enc_dataset', f'{nr:05}'), codes[j].squeeze(dim=0).cpu().detach().numpy())
-            # torch.save(codes[j],join(results_dir, 'enc_dataset', f'{nr:05}.pt'))
+            latentrgb2np = latentrgb.squeeze(dim=0).cpu().detach().numpy()
+            latentrgb2npk=latentrgb2np[j]
+            latentrgb2npk=latentrgb2npk*255/latentrgb2npk.max()
+            # print(latentrgb2npk.shape)
+            latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
+            # print(latentrgb2npk.shape)
+            # im = Image.fromarray(latentrgb2np)
+            path = join(results_dir, 'enc_dataset', f'{nr:05}.png')
+            # print(path)
+            cv2.imwrite(path,latentrgb2npk)
 
 
 if __name__ == '__main__':
