@@ -103,7 +103,7 @@ def main(config):
                 X.transpose_(X.dim() - 2, X.dim() - 1)
         E.eval()
         with torch.no_grad():
-            _, _, _, latentrgb = E(X)
+            latentrgb, _, _  = E(X)
         bs = config['batch_size']
         for j in range(bs):
             nr = (i-1)*bs+j

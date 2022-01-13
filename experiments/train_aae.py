@@ -104,9 +104,9 @@ def main(config):
     #
     # Float Tensors
     #
-    fixed_noise = torch.FloatTensor(config['batch_size'], config['z_size'], 1)
+    fixed_noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
     fixed_noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
-    noise = torch.FloatTensor(config['batch_size'], config['z_size'])
+    noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
 
     fixed_noise = fixed_noise.to(device)
     noise = noise.to(device)
@@ -155,13 +155,13 @@ def main(config):
             if X.size(-1) == 3:
                 X.transpose_(X.dim() - 2, X.dim() - 1)
 
-            codes, _, _ , _= E(X)
+            codes, _, _ = E(X)
             noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
             synth_logit = D(codes)
             real_logit = D(noise)
             loss_d = torch.mean(synth_logit) - torch.mean(real_logit)
 
-            alpha = torch.rand(config['batch_size'], 1).to(device)
+            alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
             differences = codes - noise
             interpolates = noise + alpha * differences
             disc_interpolates = D(interpolates)
@@ -229,13 +229,10 @@ def main(config):
         D.eval()
         with torch.no_grad():
             fake = G(fixed_noise).data.cpu().numpy()
-            codes, _, _ , latentrgb= E(X)
+            codes, _, _ = E(X)
             X_rec = G(codes).data.cpu().numpy()
-            # print(latentrgb.shape)
-            # latentrgb=latentrgb*255/latentrgb.max()
-            # print(latentrgb.max())
-            latentrgb2np = latentrgb.squeeze(dim=0).cpu().detach().numpy()         
-            
+            latentrgb2np = codes.squeeze(dim=0).cpu().detach().numpy()  
+            print(codes.max())       
 
         for k in range(5):
             fig = plot_3d_point_cloud(X[k][0], X[k][1], X[k][2],

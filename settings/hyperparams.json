@@ -1,6 +1,7 @@
 {
     "experiment_name": "experiment",
     "results_root": "datasets/results/",
+    "dec_path": "/home/szilard/projects/DisentangledVAE/latent_samples/",
     "clean_results_dir": false,
 
     "cuda": true,

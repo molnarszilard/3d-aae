@@ -44,6 +44,7 @@ def prepare_results_dir(config):
     makedirs(join(output_dir, 'samples'), exist_ok=True)
     makedirs(join(output_dir, 'results'), exist_ok=True)
     makedirs(join(output_dir, 'enc_dataset'), exist_ok=True)
+    makedirs(join(output_dir, 'generated_dec'), exist_ok=True)
     return output_dir
 
 

@@ -9,6 +9,8 @@ class Generator(nn.Module):
         super().__init__()
 
         self.z_size = config['z_size']
+        self.z_h = config['latent_image_height']
+        self.z_w = config['latent_image_width']
         self.use_bias = config['model']['G']['use_bias']
         self.relu_slope = config['model']['G']['relu_slope']
         self.model = nn.Sequential(
@@ -26,9 +28,12 @@ class Generator(nn.Module):
 
             nn.Linear(in_features=1024, out_features=2048 * 3, bias=self.use_bias),
         )
+        self.fc2 = nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True)
 
     def forward(self, input):
-        output = self.model(input.squeeze())
+        flattened_input = torch.flatten(input, start_dim=1)
+        z=self.fc2(flattened_input)
+        output = self.model(z.squeeze())
         output = output.view(-1, 3, 2048)
         return output
 
@@ -38,6 +43,8 @@ class Discriminator(nn.Module):
         super().__init__()
 
         self.z_size = config['z_size']
+        self.z_h = config['latent_image_height']
+        self.z_w = config['latent_image_width']
         self.use_bias = config['model']['D']['use_bias']
         self.relu_slope = config['model']['D']['relu_slope']
         self.dropout = config['model']['D']['dropout']
@@ -58,9 +65,12 @@ class Discriminator(nn.Module):
 
             nn.Linear(64, 1, bias=True)
         )
+        self.fc2 = nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True)
 
     def forward(self, x):
-        logit = self.model(x)
+        flattened_input = torch.flatten(x, start_dim=1)
+        z=self.fc2(flattened_input)
+        logit = self.model(z)
         return logit
 
 
@@ -100,10 +110,7 @@ class Encoder(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-        self.fc2 = nn.Sequential(
-            nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True),
-            nn.ReLU(inplace=True)
-        )
+        
 
         self.mu_layer = nn.Linear(256, self.z_size, bias=True)
         self.std_layer = nn.Linear(256, self.z_size, bias=True)
@@ -136,9 +143,7 @@ class Encoder(nn.Module):
         # print(image_format.shape)
         imagergb = self.decoder_inputrgb(image_format)
         # print(imagergb.shape)
-        flattened_input = torch.flatten(imagergb, start_dim=1)
-        # print(flattened_input.shape)
-        z=self.fc2(flattened_input)
+        
         # print(z.shape)
-        return z, mu, logvar, imagergb
+        return imagergb, mu, logvar
 
