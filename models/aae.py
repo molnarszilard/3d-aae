@@ -26,17 +26,14 @@ class Generator(nn.Module):
             nn.Linear(in_features=512, out_features=1024, bias=self.use_bias),
             nn.ReLU(inplace=True),
 
-            nn.Linear(in_features=1024, out_features=2048 * 3, bias=self.use_bias)
+            nn.Linear(in_features=1024, out_features=2048 * 3, bias=self.use_bias),
         )
         self.fc2 = nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True)
 
     def forward(self, input):
         flattened_input = torch.flatten(input, start_dim=1)
-        # print(flattened_input.shape)
         z=self.fc2(flattened_input)
-        # print(z.shape)
-        output = self.model(z)
-        # print(output.shape)
+        output = self.model(z.squeeze())
         output = output.view(-1, 3, 2048)
         return output
 
