@@ -151,6 +151,8 @@ def main(config):
     #
     fixed_noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
     fixed_noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
+    # print(fixed_noise.min())
+    # print(fixed_noise.max())
     noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
 
     fixed_noise = fixed_noise.to(device)
@@ -298,7 +300,7 @@ def main(config):
 
         for k in range(5):
             latentrgb2npk=latentrgb2np[k]
-            latentrgb2npk=latentrgb2npk*255/latentrgb2npk.max()
+            latentrgb2npk=latentrgb2npk*255
             latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
             path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
             cv2.imwrite(path,latentrgb2npk)
