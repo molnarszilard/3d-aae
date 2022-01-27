@@ -22,9 +22,42 @@ sys.path.append('../')
 sys.path.append('./')
 from utils.pcutil import plot_3d_point_cloud
 from utils.util import find_latest_epoch, prepare_results_dir, cuda_setup, setup_logging
+import open3d as o3d
+import trimesh
+from losses.losses2d import *
 
 cudnn.benchmark = True
 
+
+def gim2pcd(gim):
+    if len(gim.shape)>3:
+        gimpcd=np.empty([gim.shape[0],3,2048])
+        for j in range(gim.shape[0]):
+            gimnp=np.array(gim[j].cpu().detach())
+            gim2flat = np.array([gimnp[0].flatten(),gimnp[1].flatten(),gimnp[2].flatten()])
+            gim2flat = np.moveaxis(gim2flat,0,-1)
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(gim2flat)
+            pcd.estimate_normals()
+            # estimate radius for rolling ball
+            distances = pcd.compute_nearest_neighbor_distance()
+            avg_dist = np.mean(distances)
+            radius = 1.5 * avg_dist
+            mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+                    pcd,
+                    o3d.utility.DoubleVector([radius, radius * 2]))
+            # create the triangular mesh with the vertices and faces from open3d
+            tri_mesh = trimesh.Trimesh(np.asarray(mesh.vertices), np.asarray(mesh.triangles),
+                                    vertex_normals=np.asarray(mesh.vertex_normals))
+
+            trimesh.convex.is_convex(tri_mesh)
+            points=tri_mesh.sample(2048)
+            pointsnp=np.array(points)
+            pointsnp = np.moveaxis(pointsnp,0,-1)
+            gimpcd[j]=pointsnp
+        return torch.from_numpy(gimpcd).cuda()
+    else:
+        return
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -62,11 +95,16 @@ def main(config):
     dataset_name = config['dataset'].lower()
     if dataset_name == 'shapenet':
         from datasets.shapenet import ShapeNetDataset
+        loss_gim = 0
         dataset = ShapeNetDataset(root_dir=config['data_dir'],
                                   classes=config['classes'])
     elif dataset_name == 'faust':
         from datasets.dfaust import DFaustDataset
         dataset = DFaustDataset(root_dir=config['data_dir'],
+                                classes=config['classes'])
+    elif dataset_name == 'modelnet':
+        from datasets.datasetloader import DatasetLoader
+        dataset = DatasetLoader(root=config['data_dir'],
                                 classes=config['classes'])
     else:
         raise ValueError(f'Invalid dataset name. Expected `shapenet` or '
@@ -101,6 +139,13 @@ def main(config):
     else:
         raise ValueError(f'Invalid reconstruction loss. Accepted `chamfer` or '
                          f'`earth_mover`, got: {config["reconstruction_loss"]}')
+    rmse = RMSE()
+    depth_criterion = RMSE_log()
+    grad_criterion = GradLoss()
+    normal_criterion = NormalLoss()
+    eval_metric = RMSE_log()
+    grad_factor = 10.
+    normal_factor = 1.
     #
     # Float Tensors
     #
@@ -147,15 +192,22 @@ def main(config):
         total_loss_eg = 0.0
         for i, point_data in enumerate(points_dataloader, 1):
             log.debug('-' * 20)
-
-            X, _ = point_data
+            X, gimgt = point_data
             X = X.to(device)
+            gimgt = gimgt.to(device)
 
             # Change dim [BATCH, N_POINTS, N_DIM] -> [BATCH, N_DIM, N_POINTS]
             if X.size(-1) == 3:
                 X.transpose_(X.dim() - 2, X.dim() - 1)
 
             codes, _, _ = E(X)
+            if dataset_name == 'modelnet':
+                depth_loss = depth_criterion(codes, gimgt)
+                grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
+                grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
+                normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
+                loss_gim = depth_loss + grad_loss + normal_loss
+
             noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
             synth_logit = D(codes)
             real_logit = D(noise)
@@ -198,7 +250,7 @@ def main(config):
 
             loss_g = -torch.mean(synth_logit)
 
-            loss_eg = loss_e + loss_g
+            loss_eg = loss_e + loss_g + loss_gim
             EG_optim.zero_grad()
             E.zero_grad()
             G.zero_grad()
@@ -207,14 +259,16 @@ def main(config):
             total_loss_eg += loss_eg.item()
             EG_optim.step()
 
-            log.debug(f'[{epoch}: ({i})] '
-                      f'Loss_D: {loss_d.item():.4f} '
-                      f'(GP: {loss_gp.item(): .4f}) '
-                      f'Loss_EG: {loss_eg.item():.4f} '
-                      f'(REC: {loss_e.item(): .4f}) '
+            print(f'[{epoch}: ({i})] '
+                      f'Loss_D: {loss_d:.4f} '
+                      f'(Loss_GP: {loss_gp: .4f}) '
+                      f'Loss_EG: {loss_eg:.4f} '
+                      f'(Loss_E: {loss_e: .4f}) '
+                      f'(Loss_G: {loss_g: .4f}) '
+                      f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
 
-        log.debug(
+        print(
             f'[{epoch}/{config["max_epochs"]}] '
             f'Loss_D: {total_loss_d / i:.4f} '
             f'Loss_EG: {total_loss_eg / i:.4f} '
@@ -232,7 +286,7 @@ def main(config):
             codes, _, _ = E(X)
             X_rec = G(codes).data.cpu().numpy()
             latentrgb2np = codes.squeeze(dim=0).cpu().detach().numpy()  
-            print(codes.max())       
+            # print(codes.max())       
 
         for k in range(5):
             fig = plot_3d_point_cloud(X[k][0], X[k][1], X[k][2],
@@ -245,21 +299,17 @@ def main(config):
         for k in range(5):
             latentrgb2npk=latentrgb2np[k]
             latentrgb2npk=latentrgb2npk*255/latentrgb2npk.max()
-            # print(latentrgb2npk.shape)
             latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
-            # print(latentrgb2npk.shape)
-            # im = Image.fromarray(latentrgb2np)
             path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
-            # print(path)
             cv2.imwrite(path,latentrgb2npk)
 
-        for k in range(5):
-            fig = plot_3d_point_cloud(fake[k][0], fake[k][1], fake[k][2],
-                                      in_u_sphere=True, show=False,
-                                      title=str(epoch))
-            fig.savefig(
-                join(results_dir, 'samples', f'{epoch:05}_{k}_fixed.png'))
-            plt.close(fig)
+        # for k in range(5):
+        #     fig = plot_3d_point_cloud(fake[k][0], fake[k][1], fake[k][2],
+        #                               in_u_sphere=True, show=False,
+        #                               title=str(epoch))
+        #     fig.savefig(
+        #         join(results_dir, 'samples', f'{epoch:05}_{k}_fixed.png'))
+        #     plt.close(fig)
 
         for k in range(5):
             fig = plot_3d_point_cloud(X_rec[k][0],

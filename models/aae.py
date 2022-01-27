@@ -26,14 +26,17 @@ class Generator(nn.Module):
             nn.Linear(in_features=512, out_features=1024, bias=self.use_bias),
             nn.ReLU(inplace=True),
 
-            nn.Linear(in_features=1024, out_features=2048 * 3, bias=self.use_bias),
+            nn.Linear(in_features=1024, out_features=2048 * 3, bias=self.use_bias)
         )
         self.fc2 = nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True)
 
     def forward(self, input):
         flattened_input = torch.flatten(input, start_dim=1)
+        # print(flattened_input.shape)
         z=self.fc2(flattened_input)
-        output = self.model(z.squeeze())
+        # print(z.shape)
+        output = self.model(z)
+        # print(output.shape)
         output = output.view(-1, 3, 2048)
         return output
 
@@ -110,12 +113,11 @@ class Encoder(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-        
-
         self.mu_layer = nn.Linear(256, self.z_size, bias=True)
         self.std_layer = nn.Linear(256, self.z_size, bias=True)
-        self.decoder_input = nn.Linear(in_features=self.z_size, out_features=self.z_h*self.z_w)
-        self.decoder_inputrgb = nn.Conv1d(in_channels=1, out_channels=3, kernel_size=[1,1])
+        self.decoder_input = nn.Sequential(nn.Linear(in_features=self.z_size, out_features=self.z_h*self.z_w*3),
+                            nn.Sigmoid()
+        )
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5*logvar)
@@ -124,26 +126,12 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         output = self.conv(x)
-        # print(x.shape)
-        # print(output.shape)
         output2 = output.max(dim=2)[0]
-        # print(output2.shape)
         logit = self.fc(output2)
-        # print(logit.shape)
         mu = self.mu_layer(logit)
-        # print(mu.shape)
         logvar = self.std_layer(logit)
         z = self.reparameterize(mu, logvar)
-        # do_matrix=nn.Linear(in_features=256, out_features=[256,256])
-        # print("before")
-        # print(z.shape)
-        image_format = self.decoder_input(z).unsqueeze(dim=1).unsqueeze(dim=1)
-        # print(decoder_input.shape)
-        image_format = image_format.view(-1, 1, self.z_h, self.z_w)
-        # print(image_format.shape)
-        imagergb = self.decoder_inputrgb(image_format)
-        # print(imagergb.shape)
-        
-        # print(z.shape)
-        return imagergb, mu, logvar
+        image_format = self.decoder_input(z)
+        image_format = image_format.view(-1, 3, self.z_h, self.z_w)
+        return image_format, mu, logvar
 

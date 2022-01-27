@@ -5,24 +5,24 @@
     "clean_results_dir": false,
 
     "cuda": true,
-    "gpu": 3,
+    "gpu": 0,
 
     "reconstruction_loss": "chamfer",
 
     "metrics": [
     ],
 
-    "latent_image_height": 64,
-    "latent_image_width": 64,
-    "dataset": "shapenet",
-    "data_dir": "datasets/shapenet/",
+    "latent_image_height": 100,
+    "latent_image_width": 100,
+    "dataset": "modelnet",
+    "data_dir": "./datasets/",
     "classes": [],
     "shuffle": true,
     "transforms": ["rotate"],
     "num_workers": 8,
     "n_points": 2048,
 
-    "max_epochs": 200,
+    "max_epochs": 1000,
     "batch_size": 50,
     "gp_lambda": 10,
     "reconstruction_coef": 0.05,
@@ -37,7 +37,7 @@
     "normal_std": 0.2,
 
     "seed": 2018,
-    "save_frequency": 5,
+    "save_frequency": 50,
     "epsilon": 0.001,
 
     "arch": "aae",

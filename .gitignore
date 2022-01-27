@@ -1,6 +1,7 @@
 datasets/shapenet/*
 datasets/results/*
 datasets/other_results/*
+dataset/ModelNet10*
 
 # Created by .ignore support plugin (hsz.mobi)
 .idea
