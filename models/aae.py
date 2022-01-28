@@ -34,9 +34,9 @@ class Generator(nn.Module):
         )
 
     def forward(self, input):
-        # flattened_input = torch.flatten(input, start_dim=1)
-        # z=self.fc2(flattened_input)
-        output = self.model(input)
+        flattened_input = torch.flatten(input, start_dim=1)
+        z=self.fc2(flattened_input)
+        output = self.model(z)
         output = output.view(-1, 3, 2048)
         return output
 
@@ -74,9 +74,9 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x):
-        # flattened_input = torch.flatten(x, start_dim=1)
-        # z=self.fc2(flattened_input)
-        logit = self.model(x)
+        flattened_input = torch.flatten(x, start_dim=1)
+        z=self.fc2(flattened_input)
+        logit = self.model(z)
         return logit
 
 
@@ -136,5 +136,5 @@ class Encoder(nn.Module):
         z = self.reparameterize(mu, logvar)
         image_format = self.decoder_input(z)
         image_format = image_format.view(-1, 3, self.z_h, self.z_w)
-        return z, mu, logvar
+        return image_format, mu, logvar
 
