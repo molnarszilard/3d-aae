@@ -149,13 +149,13 @@ def main(config):
     #
     # Float Tensors
     #
-    fixed_noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
-    fixed_noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
+    # fixed_noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
+    # fixed_noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
     # print(fixed_noise.min())
     # print(fixed_noise.max())
-    noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
-
-    fixed_noise = fixed_noise.to(device)
+    # noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
+    noise = torch.FloatTensor(config['batch_size'], config['z_size'])
+    # fixed_noise = fixed_noise.to(device)
     noise = noise.to(device)
 
     #
@@ -203,19 +203,20 @@ def main(config):
                 X.transpose_(X.dim() - 2, X.dim() - 1)
 
             codes, _, _ = E(X)
-            if dataset_name == 'modelnet':
-                depth_loss = depth_criterion(codes, gimgt)
-                grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
-                grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
-                normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
-                loss_gim = depth_loss + grad_loss + normal_loss
+            # if dataset_name == 'modelnet':
+            #     depth_loss = depth_criterion(codes, gimgt)
+            #     grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
+            #     grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
+            #     normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
+            #     loss_gim = depth_loss + grad_loss + normal_loss
 
             noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
             synth_logit = D(codes)
             real_logit = D(noise)
-            loss_d = torch.mean(synth_logit) - torch.mean(real_logit)
+            loss_d = torch.sum(synth_logit) - torch.sum(real_logit)
 
-            alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
+            # alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
+            alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
             differences = codes - noise
             interpolates = noise + alpha * differences
             disc_interpolates = D(interpolates)
@@ -243,16 +244,16 @@ def main(config):
             # EG part of training
             X_rec = G(codes)
 
-            loss_e = torch.mean(
+            loss_e = torch.sum(
                 config['reconstruction_coef'] *
                 reconstruction_loss(X.permute(0, 2, 1) + 0.5,
                                     X_rec.permute(0, 2, 1) + 0.5))
 
             synth_logit = D(codes)
 
-            loss_g = -torch.mean(synth_logit)
+            loss_g = -torch.sum(synth_logit)
 
-            loss_eg = loss_e + loss_g + loss_gim
+            loss_eg = loss_e + loss_g
             EG_optim.zero_grad()
             E.zero_grad()
             G.zero_grad()
@@ -267,7 +268,7 @@ def main(config):
                       f'Loss_EG: {loss_eg:.4f} '
                       f'(Loss_E: {loss_e: .4f}) '
                       f'(Loss_G: {loss_g: .4f}) '
-                      f'(Loss_GIM: {loss_gim: .4f}) '
+                    #   f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
 
         print(
@@ -284,7 +285,7 @@ def main(config):
         E.eval()
         D.eval()
         with torch.no_grad():
-            fake = G(fixed_noise).data.cpu().numpy()
+            # fake = G(fixed_noise).data.cpu().numpy()
             codes, _, _ = E(X)
             X_rec = G(codes).data.cpu().numpy()
             latentrgb2np = codes.squeeze(dim=0).cpu().detach().numpy()  
@@ -298,12 +299,12 @@ def main(config):
                 join(results_dir, 'samples', f'{epoch:05}_{k}_real.png'))
             plt.close(fig)
 
-        for k in range(5):
-            latentrgb2npk=latentrgb2np[k]
-            latentrgb2npk=latentrgb2npk*255
-            latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
-            path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
-            cv2.imwrite(path,latentrgb2npk)
+        # for k in range(5):
+        #     latentrgb2npk=latentrgb2np[k]
+        #     latentrgb2npk=latentrgb2npk*255
+        #     latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
+        #     path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
+        #     cv2.imwrite(path,latentrgb2npk)
 
         # for k in range(5):
         #     fig = plot_3d_point_cloud(fake[k][0], fake[k][1], fake[k][2],

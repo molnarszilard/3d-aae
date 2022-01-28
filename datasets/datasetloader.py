@@ -32,8 +32,9 @@ class DatasetLoader(data.Dataset):
         # depth_input_mod = np.moveaxis(depth_input,-1,0)
         # gimgt= Compose([Resize((100,100)), ToTensor()])(gimgt)
         gimgt=torch.from_numpy(np.moveaxis(gimgt,-1,0))
-        gimgt=gimgt-gimgt.min()
-        gimgt=gimgt/gimgt.max()
+        # gimgt=gimgt-gimgt.min()
+        # gimgt=gimgt/gimgt.max()
+        gimgt=gimgt/255
         gimgt_rgb=gimgt*0
         gimgt_rgb[0]=gimgt[1]
         gimgt_rgb[1]=gimgt[0]
