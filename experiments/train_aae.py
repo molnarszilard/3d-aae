@@ -203,12 +203,12 @@ def main(config):
                 X.transpose_(X.dim() - 2, X.dim() - 1)
 
             codes, _, _ = E(X)
-            # if dataset_name == 'modelnet':
-            #     depth_loss = depth_criterion(codes, gimgt)
-            #     grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
-            #     grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
-            #     normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
-            #     loss_gim = depth_loss + grad_loss + normal_loss
+            if dataset_name == 'modelnet':
+                depth_loss = depth_criterion(codes, gimgt)
+                grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
+                grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
+                normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
+                loss_gim = depth_loss + grad_loss + normal_loss
 
             # noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
             # synth_logit = D(codes)
@@ -253,7 +253,7 @@ def main(config):
 
             # loss_g = -torch.sum(synth_logit)
 
-            loss_eg = loss_e #+ loss_g
+            loss_eg = loss_e + loss_gim
             EG_optim.zero_grad()
             E.zero_grad()
             G.zero_grad()
@@ -265,10 +265,10 @@ def main(config):
             print(f'[{epoch}: ({i})] '
                     #   f'Loss_D: {loss_d:.4f} '
                     #   f'(Loss_GP: {loss_gp: .4f}) '
-                    #   f'Loss_EG: {loss_eg:.4f} '
+                      f'Loss_EG: {loss_eg:.4f} '
                       f'(Loss_E: {loss_e: .4f}) '
                     #   f'(Loss_G: {loss_g: .4f}) '
-                    #   f'(Loss_GIM: {loss_gim: .4f}) '
+                      f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
 
         print(
@@ -299,12 +299,12 @@ def main(config):
                 join(results_dir, 'samples', f'{epoch:05}_{k}_real.png'))
             plt.close(fig)
 
-        # for k in range(5):
-        #     latentrgb2npk=latentrgb2np[k]
-        #     latentrgb2npk=latentrgb2npk*255
-        #     latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
-        #     path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
-        #     cv2.imwrite(path,latentrgb2npk)
+        for k in range(5):
+            latentrgb2npk=latentrgb2np[k]
+            latentrgb2npk=latentrgb2npk*255
+            latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
+            path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
+            cv2.imwrite(path,latentrgb2npk)
 
         # for k in range(5):
         #     fig = plot_3d_point_cloud(fake[k][0], fake[k][1], fake[k][2],
