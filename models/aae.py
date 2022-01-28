@@ -28,7 +28,10 @@ class Generator(nn.Module):
 
             nn.Linear(in_features=1024, out_features=2048 * 3, bias=self.use_bias),
         )
-        self.fc2 = nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True)
+        self.fc2 = nn.Sequential(
+            nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True),
+            nn.ReLU(inplace=True)
+        )
 
     def forward(self, input):
         # flattened_input = torch.flatten(input, start_dim=1)
@@ -65,7 +68,10 @@ class Discriminator(nn.Module):
 
             nn.Linear(64, 1, bias=True)
         )
-        self.fc2 = nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True)
+        self.fc2 = nn.Sequential(
+            nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True),
+            nn.ReLU(inplace=True)
+        )
 
     def forward(self, x):
         # flattened_input = torch.flatten(x, start_dim=1)

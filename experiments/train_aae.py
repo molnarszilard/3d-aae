@@ -210,36 +210,36 @@ def main(config):
             #     normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
             #     loss_gim = depth_loss + grad_loss + normal_loss
 
-            # noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
-            # synth_logit = D(codes)
-            # real_logit = D(noise)
-            # loss_d = torch.sum(synth_logit) - torch.sum(real_logit)
+            noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
+            synth_logit = D(codes)
+            real_logit = D(noise)
+            loss_d = torch.sum(synth_logit) - torch.sum(real_logit)
 
-            # # alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
-            # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
-            # differences = codes - noise
-            # interpolates = noise + alpha * differences
-            # disc_interpolates = D(interpolates)
+            # alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
+            alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
+            differences = codes - noise
+            interpolates = noise + alpha * differences
+            disc_interpolates = D(interpolates)
 
-            # gradients = grad(
-            #     outputs=disc_interpolates,
-            #     inputs=interpolates,
-            #     grad_outputs=torch.ones_like(disc_interpolates).to(device),
-            #     create_graph=True,
-            #     retain_graph=True,
-            #     only_inputs=True)[0]
-            # slopes = torch.sqrt(torch.sum(gradients ** 2, dim=1))
-            # gradient_penalty = ((slopes - 1) ** 2).mean()
-            # loss_gp = config['gp_lambda'] * gradient_penalty
-            # ###
-            # loss_d += loss_gp
+            gradients = grad(
+                outputs=disc_interpolates,
+                inputs=interpolates,
+                grad_outputs=torch.ones_like(disc_interpolates).to(device),
+                create_graph=True,
+                retain_graph=True,
+                only_inputs=True)[0]
+            slopes = torch.sqrt(torch.sum(gradients ** 2, dim=1))
+            gradient_penalty = ((slopes - 1) ** 2).mean()
+            loss_gp = config['gp_lambda'] * gradient_penalty
+            ###
+            loss_d += loss_gp
 
-            # D_optim.zero_grad()
-            # D.zero_grad()
+            D_optim.zero_grad()
+            D.zero_grad()
 
-            # loss_d.backward(retain_graph=True)
-            # total_loss_d += loss_d.item()
-            # D_optim.step()
+            loss_d.backward(retain_graph=True)
+            total_loss_d += loss_d.item()
+            D_optim.step()
 
             # EG part of training
             X_rec = G(codes)
@@ -249,11 +249,11 @@ def main(config):
                 reconstruction_loss(X.permute(0, 2, 1) + 0.5,
                                     X_rec.permute(0, 2, 1) + 0.5))
 
-            # synth_logit = D(codes)
+            synth_logit = D(codes)
 
-            # loss_g = -torch.sum(synth_logit)
+            loss_g = -torch.sum(synth_logit)
 
-            loss_eg = loss_e #+ loss_g
+            loss_eg = loss_e + loss_g
             EG_optim.zero_grad()
             E.zero_grad()
             G.zero_grad()
@@ -263,11 +263,11 @@ def main(config):
             EG_optim.step()
 
             print(f'[{epoch}: ({i})] '
-                    #   f'Loss_D: {loss_d:.4f} '
-                    #   f'(Loss_GP: {loss_gp: .4f}) '
-                    #   f'Loss_EG: {loss_eg:.4f} '
+                      f'Loss_D: {loss_d:.4f} '
+                      f'(Loss_GP: {loss_gp: .4f}) '
+                      f'Loss_EG: {loss_eg:.4f} '
                       f'(Loss_E: {loss_e: .4f}) '
-                    #   f'(Loss_G: {loss_g: .4f}) '
+                      f'(Loss_G: {loss_g: .4f}) '
                     #   f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
 
