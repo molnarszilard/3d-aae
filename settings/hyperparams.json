@@ -14,8 +14,8 @@
 
     "latent_image_height": 100,
     "latent_image_width": 100,
-    "dataset": "shapenet",
-    "data_dir": "./datasets/shapenet/",
+    "dataset": "modelnet",
+    "data_dir": "./datasets/",
     "classes": [],
     "shuffle": true,
     "transforms": ["rotate"],
