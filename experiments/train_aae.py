@@ -33,7 +33,7 @@ def gim2pcd(gim):
     if len(gim.shape)>3:
         gimpcd=np.empty([gim.shape[0],3,2048])
         for j in range(gim.shape[0]):
-            gimnp=np.array(gim[j].cpu().detach())
+            gimnp=np.array(gim[j])
             gim2flat = np.array([gimnp[0].flatten(),gimnp[1].flatten(),gimnp[2].flatten()])
             gim2flat = np.moveaxis(gim2flat,0,-1)
             pcd = o3d.geometry.PointCloud()
@@ -54,8 +54,10 @@ def gim2pcd(gim):
             points=tri_mesh.sample(2048)
             pointsnp=np.array(points)
             pointsnp = np.moveaxis(pointsnp,0,-1)
-            gimpcd[j]=pointsnp
-        return torch.from_numpy(gimpcd).cuda()
+            pointsnp = pointsnp - pointsnp.min()
+            pointsnp_normalized = pointsnp/np.absolute(pointsnp).max()-0.5
+            gimpcd[j]=pointsnp_normalized
+        return torch.from_numpy(gimpcd)
     else:
         return
 
@@ -144,8 +146,10 @@ def main(config):
     grad_criterion = GradLoss()
     normal_criterion = NormalLoss()
     eval_metric = RMSE_log()
+    l1_criterion = L1()
     grad_factor = 10.
     normal_factor = 1.
+    gim_factor = 10.
     #
     # Float Tensors
     #
@@ -153,8 +157,8 @@ def main(config):
     # fixed_noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
     # print(fixed_noise.min())
     # print(fixed_noise.max())
-    # noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
-    noise = torch.FloatTensor(config['batch_size'], config['z_size'])
+    noise = torch.FloatTensor(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width'])
+    # noise = torch.FloatTensor(config['batch_size'], config['z_size'])
     # fixed_noise = fixed_noise.to(device)
     noise = noise.to(device)
 
@@ -205,41 +209,45 @@ def main(config):
             codes, _, _ = E(X)
             if dataset_name == 'modelnet':
                 depth_loss = depth_criterion(codes, gimgt)
-                grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
-                grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
-                normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
-                loss_gim = depth_loss + grad_loss + normal_loss
+                # grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
+                # grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
+                # normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
+                l1_loss = l1_criterion(codes, gimgt)
+                loss_gim = depth_loss + l1_loss#+ grad_loss + normal_loss
+                loss_gim*=gim_factor
 
-            # noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
-            # synth_logit = D(codes)
-            # real_logit = D(noise)
-            # loss_d = torch.sum(synth_logit) - torch.sum(real_logit)
+            useD=False
+            if useD:
+                noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
+                synth_logit = D(codes)
+                real_logit = D(noise)
+                loss_d = torch.mean(synth_logit) - torch.mean(real_logit)
 
-            # # alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
-            # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
-            # differences = codes - noise
-            # interpolates = noise + alpha * differences
-            # disc_interpolates = D(interpolates)
+                alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
+                # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
+                differences = codes - noise
+                interpolates = noise + alpha * differences
+                disc_interpolates = D(interpolates)
 
-            # gradients = grad(
-            #     outputs=disc_interpolates,
-            #     inputs=interpolates,
-            #     grad_outputs=torch.ones_like(disc_interpolates).to(device),
-            #     create_graph=True,
-            #     retain_graph=True,
-            #     only_inputs=True)[0]
-            # slopes = torch.sqrt(torch.sum(gradients ** 2, dim=1))
-            # gradient_penalty = ((slopes - 1) ** 2).mean()
-            # loss_gp = config['gp_lambda'] * gradient_penalty
-            # ###
-            # loss_d += loss_gp
+                gradients = grad(
+                    outputs=disc_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=torch.ones_like(disc_interpolates).to(device),
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True)[0]
+                slopes = torch.sqrt(torch.sum(gradients ** 2, dim=1))
+                gradient_penalty = ((slopes - 1) ** 2).mean()
+                loss_gp = torch.sqrt(config['gp_lambda'] * gradient_penalty)
+                ###
+                loss_d += loss_gp
+                # loss_d *= 0.01
+                D_optim.zero_grad()
+                D.zero_grad()
 
-            # D_optim.zero_grad()
-            # D.zero_grad()
-
-            # loss_d.backward(retain_graph=True)
-            # total_loss_d += loss_d.item()
-            # D_optim.step()
+                loss_d.backward(retain_graph=True)
+                total_loss_d += loss_d.item()
+                D_optim.step()
 
             # EG part of training
             X_rec = G(codes)
@@ -249,11 +257,13 @@ def main(config):
                 reconstruction_loss(X.permute(0, 2, 1) + 0.5,
                                     X_rec.permute(0, 2, 1) + 0.5))
 
-            # synth_logit = D(codes)
+            if useD:
+                synth_logit = D(codes)
+                loss_g = -torch.mean(synth_logit)
+                loss_eg = loss_e + loss_gim# + loss_g
+            else:
+                loss_eg = loss_e + loss_gim
 
-            # loss_g = -torch.sum(synth_logit)
-
-            loss_eg = loss_e + loss_gim
             EG_optim.zero_grad()
             E.zero_grad()
             G.zero_grad()
@@ -288,16 +298,28 @@ def main(config):
             # fake = G(fixed_noise).data.cpu().numpy()
             codes, _, _ = E(X)
             X_rec = G(codes).data.cpu().numpy()
-            latentrgb2np = codes.squeeze(dim=0).cpu().detach().numpy()  
-            # print(codes.max())       
+            latentrgb2np = codes.cpu().detach().numpy()   
 
         for k in range(5):
+            # print(X.shape)
+            # print(X[k].shape)
             fig = plot_3d_point_cloud(X[k][0], X[k][1], X[k][2],
                                       in_u_sphere=True, show=False,
                                       title=str(epoch))
             fig.savefig(
                 join(results_dir, 'samples', f'{epoch:05}_{k}_real.png'))
             plt.close(fig)
+        
+        if epoch%200==0:
+            for k in range(5):
+                print(f'gim2pcd_{k}')
+                fakepcd=gim2pcd(latentrgb2np)
+                fig = plot_3d_point_cloud(fakepcd[0], fakepcd[1], fakepcd[2],
+                                        in_u_sphere=True, show=False,
+                                        title=str(epoch))
+                fig.savefig(
+                    join(results_dir, 'samples', f'{epoch:05}_{k}_fake.png'))
+                plt.close(fig)
 
         for k in range(5):
             latentrgb2npk=latentrgb2np[k]
@@ -305,6 +327,14 @@ def main(config):
             latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
             path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
             cv2.imwrite(path,latentrgb2npk)
+
+        # for k in range(5):
+        #     # print(gimgt.shape)
+        #     latentrgb2npk=gimgt[k].cpu().detach().numpy()
+        #     latentrgb2npk=latentrgb2npk*255
+        #     latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
+        #     path = join(results_dir, 'samples', f'{epoch:05}_{k}_gimgt.png')
+        #     cv2.imwrite(path,latentrgb2npk)
 
         # for k in range(5):
         #     fig = plot_3d_point_cloud(fake[k][0], fake[k][1], fake[k][2],
