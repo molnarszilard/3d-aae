@@ -136,10 +136,10 @@ class Encoder(nn.Module):
         # mat2= self.m2i(mat1)
         # vect=torch.flatten(output, start_dim=1)
         output2 = output.max(dim=2)[0]
-        logit = self.fc(output2)
-        mu = self.mu_layer(logit)
-        logvar = self.std_layer(logit)
-        z = self.reparameterize(mu, logvar)
+        # logit = self.fc(output2)
+        # mu = self.mu_layer(logit)
+        # logvar = self.std_layer(logit)
+        # z = self.reparameterize(mu, logvar)
         image_format = self.decoder_input(output2)
         image_format = image_format.view(-1, 3, self.z_h, self.z_w)
         return image_format

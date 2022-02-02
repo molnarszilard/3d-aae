@@ -240,29 +240,42 @@ def main(config):
                 #       f'GL_l3: {gloss_l1_3: .4f} '
                 #       f'GL3: {gimloss3:.4f} ')
 
-            useD=False
+            useD=True
             if useD:
                 noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
-                synth_logit_gim = D(gim_reco)
-                synth_logit_pcd = D(gim_pcd)
-                real_logit = D(noise)
-                loss_d = torch.mean(synth_logit) - torch.mean(real_logit)
+                # synth_logit_gim = D(gim_reco)
+                synth_logit = D(gim_pcd)
+                gt_logit = D(gimgt)
+                # real_logit = D(noise)
+                loss_d = torch.mean(gt_logit) - torch.mean(synth_logit)
 
                 alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
                 # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
-                differences = gim_pcd - noise
-                interpolates = noise + alpha * differences
+                differences_gt = gimgt - noise
+                differences_gim = gim_pcd - noise
+                interpolates = noise + alpha * differences_gim
+                interpolatesgt = noise + alpha * differences_gt
                 disc_interpolates = D(interpolates)
+                disc_interpolatesgt = D(interpolatesgt)
 
-                gradients = grad(
+                gradients_gim = grad(
                     outputs=disc_interpolates,
                     inputs=interpolates,
                     grad_outputs=torch.ones_like(disc_interpolates).to(device),
                     create_graph=True,
                     retain_graph=True,
                     only_inputs=True)[0]
-                slopes = torch.sqrt(torch.sum(gradients ** 2, dim=1))
+                # gradients_gt = grad(
+                #     outputs=disc_interpolatesgt,
+                #     inputs=interpolatesgt,
+                #     grad_outputs=torch.ones_like(disc_interpolatesgt).to(device),
+                #     create_graph=True,
+                #     retain_graph=True,
+                #     only_inputs=True)[0]
+                slopes = torch.sqrt(torch.sum(gradients_gim ** 2, dim=1))
+                # slopesgt = torch.sqrt(torch.sum(gradients_gt ** 2, dim=1))
                 gradient_penalty = ((slopes - 1) ** 2).mean()
+                # gradient_penaltygt = ((slopesgt - 1) ** 2).mean()
                 loss_gp = torch.sqrt(config['gp_lambda'] * gradient_penalty)
                 ###
                 loss_d += loss_gp
@@ -308,14 +321,23 @@ def main(config):
             total_loss_eg += loss_eg.item()
             EG_optim.step()
 
-            print(f'[{epoch}: ({i})] '
-                    #   f'Loss_D: {loss_d:.4f} '
-                    #   f'(Loss_GP: {loss_gp: .4f}) '
+            if useD:
+                print(f'[{epoch}: ({i})] '
+                      f'Loss_D: {loss_d:.4f} '
+                      f'(Loss_GP: {loss_gp: .4f}) '
                       f'Loss_EG: {loss_eg:.4f} '
                       f'(Loss_E: {loss_e: .4f}) '
-                    #   f'(Loss_G: {loss_g: .4f}) '
+                      f'(Loss_G: {loss_g: .4f}) '
                       f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
+            else:
+                print(f'[{epoch}: ({i})] '
+                      f'Loss_EG: {loss_eg:.4f} '
+                      f'(Loss_E: {loss_e: .4f}) '
+                      f'(Loss_GIM: {loss_gim: .4f}) '
+                      f'Time: {datetime.now() - start_epoch_time}')
+
+            
 
         print(
             f'[{epoch}/{config["max_epochs"]}] '

@@ -5,7 +5,7 @@
     "clean_results_dir": false,
 
     "cuda": true,
-    "gpu": 0,
+    "gpu": 2,
 
     "reconstruction_loss": "chamfer",
 
