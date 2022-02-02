@@ -208,9 +208,9 @@ def main(config):
             
             # EG part of training
             gim_pcd = E(pcdgt)
-            pcd_reco = G(gim_pcd)
+            # pcd_reco = G(gim_pcd)
             pcd_gim = G(gimgt)            
-            gim_reco = E(pcd_gim)
+            # gim_reco = E(pcd_gim)
             if dataset_name == 'modelnet':
                 # depth_loss = depth_criterion(gim_pcd, gimgt)
                 # grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(gim_pcd)
@@ -220,15 +220,15 @@ def main(config):
                 # loss_gim = depth_loss + l1_loss + grad_loss + normal_loss
                 # loss_gim*=gim_factor
                 gloss_rmselog1 = depth_criterion(gim_pcd,gimgt)
-                gloss_rmselog2 = depth_criterion(gim_pcd,gim_reco)
-                gloss_rmselog3 = depth_criterion(gim_reco,gimgt)
+                # gloss_rmselog2 = depth_criterion(gim_pcd,gim_reco)
+                # gloss_rmselog3 = depth_criterion(gim_reco,gimgt)
                 gloss_l1_1 = l1_criterion(gim_pcd,gimgt)
-                gloss_l1_2 = l1_criterion(gim_pcd,gim_reco)
-                gloss_l1_3 = l1_criterion(gim_reco,gimgt)
+                # gloss_l1_2 = l1_criterion(gim_pcd,gim_reco)
+                # gloss_l1_3 = l1_criterion(gim_reco,gimgt)
                 gimloss1 = gloss_rmselog1 + gloss_l1_1
-                gimloss2 = gloss_rmselog2 + gloss_l1_2
-                gimloss3 = gloss_rmselog3 + gloss_l1_3
-                loss_gim = gimloss1 + gimloss2 + gimloss3
+                # gimloss2 = gloss_rmselog2 + gloss_l1_2
+                # gimloss3 = gloss_rmselog3 + gloss_l1_3
+                loss_gim = gimloss1# + gimloss2 + gimloss3
                 loss_gim*=gim_factor
                 # print(f'GL_rmse1: {gloss_rmselog1:.4f} '
                 #       f'GL_l1: {gloss_l1_1: .4f} '
@@ -280,15 +280,15 @@ def main(config):
                 config['reconstruction_coef'] *
                 reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
                                     pcd_gim.permute(0, 2, 1) + 0.5))
-            loss_cd2 = torch.sum(
-                config['reconstruction_coef'] *
-                reconstruction_loss(pcd_gim.permute(0, 2, 1) + 0.5,
-                                    pcd_reco.permute(0, 2, 1) + 0.5))
-            loss_cd3 = torch.sum(
-                config['reconstruction_coef'] *
-                reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
-                                    pcd_reco.permute(0, 2, 1) + 0.5))
-            loss_e = loss_cd1 + loss_cd2 + loss_cd3
+            # loss_cd2 = torch.sum(
+            #     config['reconstruction_coef'] *
+            #     reconstruction_loss(pcd_gim.permute(0, 2, 1) + 0.5,
+            #                         pcd_reco.permute(0, 2, 1) + 0.5))
+            # loss_cd3 = torch.sum(
+            #     config['reconstruction_coef'] *
+            #     reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
+            #                         pcd_reco.permute(0, 2, 1) + 0.5))
+            loss_e = loss_cd1# + loss_cd2 + loss_cd3
             # print(  f'CDL1: {loss_cd1:.4f} '
             #         f'CDL2: {loss_cd2: .4f} '
             #         f'CDL3: {loss_cd3:.4f} ')
