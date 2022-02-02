@@ -28,7 +28,8 @@ class DatasetLoader(data.Dataset):
         path = self.depth_input_paths[index]
         pcd = o3d.io.read_point_cloud(path)
         pcd = torch.from_numpy(np.moveaxis(np.array(pcd.points).astype(np.float32),-1,0))
-        gimgt=cv2.imread(path.replace('ModelNet10_pcd', 'ModelNet10_gim').replace('pcd','jpg'),cv2.IMREAD_UNCHANGED).astype(np.float32)
+        pathgim=path.replace('ModelNet10_pcd', 'ModelNet10_gim').replace('pcd','png')
+        gimgt=cv2.imread(pathgim,cv2.IMREAD_UNCHANGED).astype(np.float32)
         # depth_input_mod = np.moveaxis(depth_input,-1,0)
         # gimgt= Compose([Resize((100,100)), ToTensor()])(gimgt)
         gimgt=torch.from_numpy(np.moveaxis(gimgt,-1,0))

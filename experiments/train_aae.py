@@ -57,7 +57,7 @@ def gim2pcd(gim):
             pointsnp = pointsnp - pointsnp.min()
             pointsnp_normalized = pointsnp/np.absolute(pointsnp).max()-0.5
             gimpcd[j]=pointsnp_normalized
-        return torch.from_numpy(gimpcd)
+        return gimpcd
     else:
         return
 
@@ -198,34 +198,59 @@ def main(config):
         total_loss_eg = 0.0
         for i, point_data in enumerate(points_dataloader, 1):
             log.debug('-' * 20)
-            X, gimgt = point_data
-            X = X.to(device)
+            pcdgt, gimgt = point_data
+            pcdgt = pcdgt.to(device)
             gimgt = gimgt.to(device)
 
             # Change dim [BATCH, N_POINTS, N_DIM] -> [BATCH, N_DIM, N_POINTS]
-            if X.size(-1) == 3:
-                X.transpose_(X.dim() - 2, X.dim() - 1)
-
-            codes, _, _ = E(X)
+            if pcdgt.size(-1) == 3:
+                pcdgt.transpose_(pcdgt.dim() - 2, pcdgt.dim() - 1)
+            
+            # EG part of training
+            gim_pcd = E(pcdgt)
+            pcd_reco = G(gim_pcd)
+            pcd_gim = G(gimgt)            
+            gim_reco = E(pcd_gim)
             if dataset_name == 'modelnet':
-                depth_loss = depth_criterion(codes, gimgt)
-                # grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(codes)
+                # depth_loss = depth_criterion(gim_pcd, gimgt)
+                # grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(gim_pcd)
                 # grad_loss = grad_criterion(grad_fake, grad_real)     * grad_factor * (epoch>3)
                 # normal_loss = normal_criterion(grad_fake, grad_real) * normal_factor * (epoch>7)
-                l1_loss = l1_criterion(codes, gimgt)
-                loss_gim = depth_loss + l1_loss#+ grad_loss + normal_loss
+                # l1_loss = l1_criterion(gim_pcd, gimgt)
+                # loss_gim = depth_loss + l1_loss + grad_loss + normal_loss
+                # loss_gim*=gim_factor
+                gloss_rmselog1 = depth_criterion(gim_pcd,gimgt)
+                gloss_rmselog2 = depth_criterion(gim_pcd,gim_reco)
+                gloss_rmselog3 = depth_criterion(gim_reco,gimgt)
+                gloss_l1_1 = l1_criterion(gim_pcd,gimgt)
+                gloss_l1_2 = l1_criterion(gim_pcd,gim_reco)
+                gloss_l1_3 = l1_criterion(gim_reco,gimgt)
+                gimloss1 = gloss_rmselog1 + gloss_l1_1
+                gimloss2 = gloss_rmselog2 + gloss_l1_2
+                gimloss3 = gloss_rmselog3 + gloss_l1_3
+                loss_gim = gimloss1 + gimloss2 + gimloss3
                 loss_gim*=gim_factor
+                # print(f'GL_rmse1: {gloss_rmselog1:.4f} '
+                #       f'GL_l1: {gloss_l1_1: .4f} '
+                #       f'GL1: {gimloss1:.4f} ')
+                # print(f'GL_rmse2: {gloss_rmselog2:.4f} '
+                #       f'GL_l2: {gloss_l1_2: .4f} '
+                #       f'GL2: {gimloss2:.4f} ')
+                # print(f'GL_rmse3: {gloss_rmselog3:.4f} '
+                #       f'GL_l3: {gloss_l1_3: .4f} '
+                #       f'GL3: {gimloss3:.4f} ')
 
             useD=False
             if useD:
                 noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
-                synth_logit = D(codes)
+                synth_logit_gim = D(gim_reco)
+                synth_logit_pcd = D(gim_pcd)
                 real_logit = D(noise)
                 loss_d = torch.mean(synth_logit) - torch.mean(real_logit)
 
                 alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
                 # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
-                differences = codes - noise
+                differences = gim_pcd - noise
                 interpolates = noise + alpha * differences
                 disc_interpolates = D(interpolates)
 
@@ -249,16 +274,27 @@ def main(config):
                 total_loss_d += loss_d.item()
                 D_optim.step()
 
-            # EG part of training
-            X_rec = G(codes)
+            
 
-            loss_e = torch.sum(
+            loss_cd1 = torch.sum(
                 config['reconstruction_coef'] *
-                reconstruction_loss(X.permute(0, 2, 1) + 0.5,
-                                    X_rec.permute(0, 2, 1) + 0.5))
+                reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
+                                    pcd_gim.permute(0, 2, 1) + 0.5))
+            loss_cd2 = torch.sum(
+                config['reconstruction_coef'] *
+                reconstruction_loss(pcd_gim.permute(0, 2, 1) + 0.5,
+                                    pcd_reco.permute(0, 2, 1) + 0.5))
+            loss_cd3 = torch.sum(
+                config['reconstruction_coef'] *
+                reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
+                                    pcd_reco.permute(0, 2, 1) + 0.5))
+            loss_e = loss_cd1 + loss_cd2 + loss_cd3
+            # print(  f'CDL1: {loss_cd1:.4f} '
+            #         f'CDL2: {loss_cd2: .4f} '
+            #         f'CDL3: {loss_cd3:.4f} ')
 
             if useD:
-                synth_logit = D(codes)
+                synth_logit = D(gim_pcd)
                 loss_g = -torch.mean(synth_logit)
                 loss_eg = loss_e + loss_gim# + loss_g
             else:
@@ -296,37 +332,83 @@ def main(config):
         D.eval()
         with torch.no_grad():
             # fake = G(fixed_noise).data.cpu().numpy()
-            codes, _, _ = E(X)
-            X_rec = G(codes).data.cpu().numpy()
-            latentrgb2np = codes.cpu().detach().numpy()   
-
-        for k in range(5):
-            # print(X.shape)
-            # print(X[k].shape)
-            fig = plot_3d_point_cloud(X[k][0], X[k][1], X[k][2],
-                                      in_u_sphere=True, show=False,
-                                      title=str(epoch))
-            fig.savefig(
-                join(results_dir, 'samples', f'{epoch:05}_{k}_real.png'))
-            plt.close(fig)
+            gim_pcd = E(pcdgt)
+            pcd_reco = G(gim_pcd)
+            pcd_gim = G(gimgt)
+            # print(pcdgt.shape)
+            # print(pcd_reco.shape)
+            # print(pcd_gim.shape)
+            gim_reco = E(pcd_gim)   
         
+        #save gim gt
+        for k in range(5):
+            gimgtnp=gimgt[k].cpu().detach().numpy()
+            gimgtnp=gimgtnp*255
+            gimgtnp = np.moveaxis(gimgtnp,0,-1)
+            path = join(results_dir, 'samples', f'{epoch:05}_{k}_gim_real.png')
+            cv2.imwrite(path,gimgtnp)
+
+        #save gim generated from pcdgt
+        for k in range(5):
+            gim_pcdnp=gim_pcd[k].cpu().detach().numpy()
+            gim_pcdnp=gim_pcdnp*255
+            gim_pcdnp = np.moveaxis(gim_pcdnp,0,-1)
+            path = join(results_dir, 'samples', f'{epoch:05}_{k}_gim_pcd.png')
+            cv2.imwrite(path,gim_pcdnp)
+        
+        #save gim reconstruction from gimgt
+        for k in range(5):
+            gim_reconp=gim_reco[k].cpu().detach().numpy()
+            gim_reconp=gim_reconp*255
+            gim_reconp = np.moveaxis(gim_reconp,0,-1)
+            path = join(results_dir, 'samples', f'{epoch:05}_{k}_gim_reco.png')
+            cv2.imwrite(path,gim_reconp)
+
+        #save pcd gt
+        for k in range(5):
+            fig = plot_3d_point_cloud(  pcdgt[k][0].data.cpu().numpy(),
+                                        pcdgt[k][1].data.cpu().numpy(), 
+                                        pcdgt[k][2].data.cpu().numpy(),
+                                        in_u_sphere=True, show=False,
+                                        title=str(epoch))
+            fig.savefig(
+                join(results_dir, 'samples', f'{epoch:05}_{k}_pcd_real.png'))
+            plt.close(fig)
+
+        #save pcd from gim
+        for k in range(5):
+            fig = plot_3d_point_cloud(  pcd_gim[k][0].data.cpu().numpy(), 
+                                        pcd_gim[k][1].data.cpu().numpy(), 
+                                        pcd_gim[k][2].data.cpu().numpy(),
+                                        in_u_sphere=True, show=False,
+                                        title=str(epoch))
+            fig.savefig(
+                join(results_dir, 'samples', f'{epoch:05}_{k}_pcd_gim.png'))
+            plt.close(fig)
+
+        #save pcd reconstruction
+        for k in range(5):
+            fig = plot_3d_point_cloud(  pcd_reco[k][0].data.cpu().numpy(), 
+                                        pcd_reco[k][1].data.cpu().numpy(), 
+                                        pcd_reco[k][2].data.cpu().numpy(),
+                                        in_u_sphere=True, show=False,
+                                        title=str(epoch))
+            fig.savefig(join(results_dir, 'samples', f'{epoch:05}_{k}_pcd_reco.png'))
+            plt.close(fig)
+
+        #generate pcd from gim_pcd, conventional mode
         if epoch%200==0:
             for k in range(5):
                 print(f'gim2pcd_{k}')
-                fakepcd=gim2pcd(latentrgb2np)
-                fig = plot_3d_point_cloud(fakepcd[0], fakepcd[1], fakepcd[2],
+                fakepcd=gim2pcd(gim_pcd.cpu().detach().numpy())
+                fig = plot_3d_point_cloud(fakepcd[k][0], fakepcd[k][1], fakepcd[k][2],
                                         in_u_sphere=True, show=False,
                                         title=str(epoch))
                 fig.savefig(
                     join(results_dir, 'samples', f'{epoch:05}_{k}_fake.png'))
                 plt.close(fig)
 
-        for k in range(5):
-            latentrgb2npk=latentrgb2np[k]
-            latentrgb2npk=latentrgb2npk*255
-            latentrgb2npk = np.moveaxis(latentrgb2npk,0,-1)
-            path = join(results_dir, 'samples', f'{epoch:05}_{k}_latentrgb.png')
-            cv2.imwrite(path,latentrgb2npk)
+        
 
         # for k in range(5):
         #     # print(gimgt.shape)
@@ -343,16 +425,6 @@ def main(config):
         #     fig.savefig(
         #         join(results_dir, 'samples', f'{epoch:05}_{k}_fixed.png'))
         #     plt.close(fig)
-
-        for k in range(5):
-            fig = plot_3d_point_cloud(X_rec[k][0],
-                                      X_rec[k][1],
-                                      X_rec[k][2],
-                                      in_u_sphere=True, show=False,
-                                      title=str(epoch))
-            fig.savefig(join(results_dir, 'samples',
-                             f'{epoch:05}_{k}_reconstructed.png'))
-            plt.close(fig)
 
         if epoch % config['save_frequency'] == 0:
             torch.save(G.state_dict(), join(weights_path, f'{epoch:05}_G.pth'))

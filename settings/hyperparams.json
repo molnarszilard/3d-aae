@@ -12,8 +12,8 @@
     "metrics": [
     ],
 
-    "latent_image_height": 100,
-    "latent_image_width": 100,
+    "latent_image_height": 128,
+    "latent_image_width": 128,
     "dataset": "modelnet",
     "data_dir": "./datasets/",
     "classes": [],
