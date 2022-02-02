@@ -111,16 +111,16 @@ class Encoder(nn.Module):
                       bias=self.use_bias),
         )
 
-        self.m2i = nn.Sequential(nn.Conv2d(32, 3, kernel_size=1, stride=1, padding=0),
-                                nn.Sigmoid())
+        # self.m2i = nn.Sequential(nn.Conv2d(32, 3, kernel_size=1, stride=1, padding=0),
+        #                         nn.Sigmoid())
 
-        # self.fc = nn.Sequential(
-        #     nn.Linear(256, 256, bias=True),
-        #     nn.ReLU(inplace=True)
-        # )
+        self.fc = nn.Sequential(
+            nn.Linear(256, 256, bias=True),
+            nn.ReLU(inplace=True)
+        )
 
-        # self.mu_layer = nn.Linear(256, self.z_size, bias=True)
-        # self.std_layer = nn.Linear(256, self.z_size, bias=True)
+        self.mu_layer = nn.Linear(256, self.z_size, bias=True)
+        self.std_layer = nn.Linear(256, self.z_size, bias=True)
         self.decoder_input = nn.Sequential(nn.Linear(in_features=256, out_features=self.z_h*self.z_w*3),
                             nn.Sigmoid()
         )
@@ -132,14 +132,14 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         output = self.conv(x)
-        mat1 = output.view(-1,32,128,128)
-        mat2= self.m2i(mat1)
+        # mat1 = output.view(-1,32,128,128)
+        # mat2= self.m2i(mat1)
         # vect=torch.flatten(output, start_dim=1)
-        # output2 = output.max(dim=2)[0]
-        # logit = self.fc(output2)
-        # mu = self.mu_layer(logit)
-        # logvar = self.std_layer(logit)
-        # z = self.reparameterize(mu, logvar)
-        # image_format = self.decoder_input(output2)
-        # image_format = image_format.view(-1, 3, self.z_h, self.z_w)
-        return mat2
+        output2 = output.max(dim=2)[0]
+        logit = self.fc(output2)
+        mu = self.mu_layer(logit)
+        logvar = self.std_layer(logit)
+        z = self.reparameterize(mu, logvar)
+        image_format = self.decoder_input(output2)
+        image_format = image_format.view(-1, 3, self.z_h, self.z_w)
+        return image_format
