@@ -114,13 +114,13 @@ class Encoder(nn.Module):
         # self.m2i = nn.Sequential(nn.Conv2d(32, 3, kernel_size=1, stride=1, padding=0),
         #                         nn.Sigmoid())
 
-        self.fc = nn.Sequential(
-            nn.Linear(256, 256, bias=True),
-            nn.ReLU(inplace=True)
-        )
+        # self.fc = nn.Sequential(
+        #     nn.Linear(256, 256, bias=True),
+        #     nn.ReLU(inplace=True)
+        # )
 
-        self.mu_layer = nn.Linear(256, self.z_size, bias=True)
-        self.std_layer = nn.Linear(256, self.z_size, bias=True)
+        # self.mu_layer = nn.Linear(256, self.z_size, bias=True)
+        # self.std_layer = nn.Linear(256, self.z_size, bias=True)
         self.decoder_input = nn.Sequential(nn.Linear(in_features=256, out_features=self.z_h*self.z_w*3),
                             nn.Sigmoid()
         )

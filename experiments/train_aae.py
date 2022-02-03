@@ -196,6 +196,8 @@ def main(config):
 
         total_loss_d = 0.0
         total_loss_eg = 0.0
+        total_loss_e = 0.0
+        total_loss_gim = 0.0
         for i, point_data in enumerate(points_dataloader, 1):
             log.debug('-' * 20)
             pcdgt, gimgt = point_data
@@ -210,7 +212,7 @@ def main(config):
             gim_pcd = E(pcdgt)
             # pcd_reco = G(gim_pcd)
             pcd_gim = G(gimgt)            
-            # gim_reco = E(pcd_gim)
+            gim_reco = E(pcd_gim)
             if dataset_name == 'modelnet':
                 # depth_loss = depth_criterion(gim_pcd, gimgt)
                 # grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(gim_pcd)
@@ -246,17 +248,18 @@ def main(config):
                 # synth_logit_gim = D(gim_reco)
                 synth_logit = D(gim_pcd)
                 gt_logit = D(gimgt)
+                reco_logit = D(gim_reco)
                 # real_logit = D(noise)
-                loss_d = torch.mean(gt_logit) - torch.mean(synth_logit)
+                loss_d = 2*torch.mean(gt_logit) - torch.mean(synth_logit)- torch.mean(reco_logit)
 
                 alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
                 # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
-                differences_gt = gimgt - noise
+                differences_reco = gim_reco - noise
                 differences_gim = gim_pcd - noise
                 interpolates = noise + alpha * differences_gim
-                interpolatesgt = noise + alpha * differences_gt
+                interpolatesreco = noise + alpha * differences_reco
                 disc_interpolates = D(interpolates)
-                disc_interpolatesgt = D(interpolatesgt)
+                disc_interpolatesreco = D(interpolatesreco)
 
                 gradients_gim = grad(
                     outputs=disc_interpolates,
@@ -265,20 +268,20 @@ def main(config):
                     create_graph=True,
                     retain_graph=True,
                     only_inputs=True)[0]
-                # gradients_gt = grad(
-                #     outputs=disc_interpolatesgt,
-                #     inputs=interpolatesgt,
-                #     grad_outputs=torch.ones_like(disc_interpolatesgt).to(device),
-                #     create_graph=True,
-                #     retain_graph=True,
-                #     only_inputs=True)[0]
+                gradients_reco = grad(
+                    outputs=disc_interpolatesreco,
+                    inputs=interpolatesreco,
+                    grad_outputs=torch.ones_like(disc_interpolatesreco).to(device),
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True)[0]
                 slopes = torch.sqrt(torch.sum(gradients_gim ** 2, dim=1))
-                # slopesgt = torch.sqrt(torch.sum(gradients_gt ** 2, dim=1))
+                slopesreco = torch.sqrt(torch.sum(gradients_reco ** 2, dim=1))
                 gradient_penalty = ((slopes - 1) ** 2).mean()
-                # gradient_penaltygt = ((slopesgt - 1) ** 2).mean()
-                loss_gp = torch.sqrt(config['gp_lambda'] * gradient_penalty)
+                gradient_penaltyreco = ((slopesreco - 1) ** 2).mean()
+                loss_gp = torch.sqrt(config['gp_lambda'] * (gradient_penalty+gradient_penaltyreco))
                 ###
-                loss_d += loss_gp
+                loss_d = loss_gp
                 # loss_d *= 0.01
                 D_optim.zero_grad()
                 D.zero_grad()
@@ -307,8 +310,8 @@ def main(config):
             #         f'CDL3: {loss_cd3:.4f} ')
 
             if useD:
-                synth_logit = D(gim_pcd)
-                loss_g = -torch.mean(synth_logit)
+                # synth_logit = D(gim_pcd)
+                # loss_g = -torch.mean(synth_logit)
                 loss_eg = loss_e + loss_gim# + loss_g
             else:
                 loss_eg = loss_e + loss_gim
@@ -319,6 +322,8 @@ def main(config):
 
             loss_eg.backward()
             total_loss_eg += loss_eg.item()
+            total_loss_e += loss_e
+            total_loss_gim += loss_gim
             EG_optim.step()
 
             if useD:
@@ -327,7 +332,7 @@ def main(config):
                       f'(Loss_GP: {loss_gp: .4f}) '
                       f'Loss_EG: {loss_eg:.4f} '
                       f'(Loss_E: {loss_e: .4f}) '
-                      f'(Loss_G: {loss_g: .4f}) '
+                    #   f'(Loss_G: {loss_g: .4f}) '
                       f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
             else:
@@ -343,6 +348,8 @@ def main(config):
             f'[{epoch}/{config["max_epochs"]}] '
             f'Loss_D: {total_loss_d / i:.4f} '
             f'Loss_EG: {total_loss_eg / i:.4f} '
+            f'Loss_EG: {total_loss_e / i:.4f} '
+            f'Loss_GIM: {total_loss_gim / i:.4f} '
             f'Time: {datetime.now() - start_epoch_time}'
         )
 
@@ -419,7 +426,7 @@ def main(config):
             plt.close(fig)
 
         #generate pcd from gim_pcd, conventional mode
-        if epoch%200==0:
+        if epoch%200==0 and total_loss_gim / i<40:
             for k in range(5):
                 print(f'gim2pcd_{k}')
                 fakepcd=gim2pcd(gim_pcd.cpu().detach().numpy())
