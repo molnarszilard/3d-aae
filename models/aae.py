@@ -67,6 +67,7 @@ class Discriminator(nn.Module):
             nn.ReLU(inplace=True),
 
             nn.Linear(64, 1, bias=True)
+            
         )
         self.fc2 = nn.Sequential(
             nn.Linear(self.z_h*self.z_w*3, self.z_size, bias=True),

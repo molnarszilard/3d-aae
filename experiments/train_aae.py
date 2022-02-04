@@ -250,8 +250,10 @@ def main(config):
                 gt_logit = D(gimgt)
                 reco_logit = D(gim_reco)
                 # real_logit = D(noise)
-                loss_d = 2*torch.mean(gt_logit) - torch.mean(synth_logit)- torch.mean(reco_logit)
-
+                loss_d = (2*torch.mean(gt_logit) - torch.mean(synth_logit)- torch.mean(reco_logit))
+                loss_kl1 = torch.nn.KLDivLoss(size_average=False)(gimgt.log(),gim_pcd.log())
+                loss_kl2 = torch.nn.KLDivLoss(size_average=False)(gimgt.log(),gim_reco.log())
+                loss_d+=loss_kl1 + loss_kl2
                 alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
                 # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
                 differences_reco = gim_reco - noise
@@ -281,8 +283,10 @@ def main(config):
                 gradient_penaltyreco = ((slopesreco - 1) ** 2).mean()
                 loss_gp = torch.sqrt(config['gp_lambda'] * (gradient_penalty+gradient_penaltyreco))
                 ###
-                loss_d = loss_gp
-                # loss_d *= 0.01
+                # loss_d += loss_gp
+                # loss_kl = torch.nn.KLDivLoss(size_average=False)(gimgt,gim_pcd)
+                # loss_d += loss_kl 
+                # loss_d *= 100.0
                 D_optim.zero_grad()
                 D.zero_grad()
 
@@ -330,6 +334,7 @@ def main(config):
                 print(f'[{epoch}: ({i})] '
                       f'Loss_D: {loss_d:.4f} '
                       f'(Loss_GP: {loss_gp: .4f}) '
+                    #   f'(Loss_KL: {loss_kl: .4f}) '
                       f'Loss_EG: {loss_eg:.4f} '
                       f'(Loss_E: {loss_e: .4f}) '
                     #   f'(Loss_G: {loss_g: .4f}) '
@@ -348,7 +353,7 @@ def main(config):
             f'[{epoch}/{config["max_epochs"]}] '
             f'Loss_D: {total_loss_d / i:.4f} '
             f'Loss_EG: {total_loss_eg / i:.4f} '
-            f'Loss_EG: {total_loss_e / i:.4f} '
+            f'Loss_E: {total_loss_e / i:.4f} '
             f'Loss_GIM: {total_loss_gim / i:.4f} '
             f'Time: {datetime.now() - start_epoch_time}'
         )
