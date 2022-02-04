@@ -165,11 +165,13 @@ def main(config):
     #
     # Optimizers
     #
-    EG_optim = getattr(optim, config['optimizer']['EG']['type'])
-    EG_optim = EG_optim(chain(E.parameters(), G.parameters()),
-                        **config['optimizer']['EG']['hyperparams'])
-
+    E_optim = getattr(optim, config['optimizer']['E']['type'])
+    G_optim = getattr(optim, config['optimizer']['G']['type'])
     D_optim = getattr(optim, config['optimizer']['D']['type'])
+    E_optim = E_optim(E.parameters(),
+                        **config['optimizer']['E']['hyperparams'])
+    G_optim = G_optim(G.parameters(),
+                        **config['optimizer']['G']['hyperparams'])
     D_optim = D_optim(D.parameters(),
                       **config['optimizer']['D']['hyperparams'])
 
@@ -184,8 +186,10 @@ def main(config):
         D_optim.load_state_dict(torch.load(
             join(weights_path, f'{starting_epoch-1:05}_Do.pth')))
 
-        EG_optim.load_state_dict(torch.load(
-            join(weights_path, f'{starting_epoch-1:05}_EGo.pth')))
+        E_optim.load_state_dict(torch.load(
+            join(weights_path, f'{starting_epoch-1:05}_Eo.pth')))
+        G_optim.load_state_dict(torch.load(
+            join(weights_path, f'{starting_epoch-1:05}_Go.pth')))
 
     for epoch in range(starting_epoch, config['max_epochs'] + 1):
         start_epoch_time = datetime.now()
@@ -195,8 +199,8 @@ def main(config):
         D.train()
 
         total_loss_d = 0.0
-        total_loss_eg = 0.0
-        total_loss_e = 0.0
+        total_loss_g = 0.0
+        # total_loss_e = 0.0
         total_loss_gim = 0.0
         for i, point_data in enumerate(points_dataloader, 1):
             log.debug('-' * 20)
@@ -242,7 +246,7 @@ def main(config):
                 #       f'GL_l3: {gloss_l1_3: .4f} '
                 #       f'GL3: {gimloss3:.4f} ')
 
-            useD=True
+            useD=False
             if useD:
                 noise.normal_(mean=config['normal_mu'], std=config['normal_std'])
                 # synth_logit_gim = D(gim_reco)
@@ -308,42 +312,47 @@ def main(config):
             #     config['reconstruction_coef'] *
             #     reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
             #                         pcd_reco.permute(0, 2, 1) + 0.5))
-            loss_e = loss_cd1# + loss_cd2 + loss_cd3
+            loss_g = loss_cd1# + loss_cd2 + loss_cd3
             # print(  f'CDL1: {loss_cd1:.4f} '
             #         f'CDL2: {loss_cd2: .4f} '
             #         f'CDL3: {loss_cd3:.4f} ')
 
-            if useD:
-                # synth_logit = D(gim_pcd)
-                # loss_g = -torch.mean(synth_logit)
-                loss_eg = loss_e + loss_gim# + loss_g
-            else:
-                loss_eg = loss_e + loss_gim
+            # if useD:
+            #     # synth_logit = D(gim_pcd)
+            #     # loss_g = -torch.mean(synth_logit)
+            #     loss_eg = loss_e + loss_gim# + loss_g
+            # else:
+            #     loss_eg = loss_e + loss_gim
 
-            EG_optim.zero_grad()
-            E.zero_grad()
-            G.zero_grad()
-
-            loss_eg.backward()
-            total_loss_eg += loss_eg.item()
-            total_loss_e += loss_e
+            # total_loss_e += loss_e.item()
+            total_loss_g += loss_g
             total_loss_gim += loss_gim
-            EG_optim.step()
+
+            E_optim.zero_grad()
+            E.zero_grad() 
+            loss_gim.backward()            
+            E_optim.step()
+
+            G_optim.zero_grad()
+            G.zero_grad()
+            loss_g.backward()
+            G_optim.step()
+
 
             if useD:
                 print(f'[{epoch}: ({i})] '
                       f'Loss_D: {loss_d:.4f} '
                       f'(Loss_GP: {loss_gp: .4f}) '
                     #   f'(Loss_KL: {loss_kl: .4f}) '
-                      f'Loss_EG: {loss_eg:.4f} '
-                      f'(Loss_E: {loss_e: .4f}) '
+                    #   f'Loss_EG: {loss_g:.4f} '
+                      f'(Loss_E: {loss_g: .4f}) '
                     #   f'(Loss_G: {loss_g: .4f}) '
                       f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
             else:
                 print(f'[{epoch}: ({i})] '
-                      f'Loss_EG: {loss_eg:.4f} '
-                      f'(Loss_E: {loss_e: .4f}) '
+                      f'Loss_G: {loss_g:.4f} '
+                    #   f'(Loss_E: {loss_e: .4f}) '
                       f'(Loss_GIM: {loss_gim: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
 
@@ -351,9 +360,9 @@ def main(config):
 
         print(
             f'[{epoch}/{config["max_epochs"]}] '
-            f'Loss_D: {total_loss_d / i:.4f} '
-            f'Loss_EG: {total_loss_eg / i:.4f} '
-            f'Loss_E: {total_loss_e / i:.4f} '
+            # f'Loss_D: {total_loss_d / i:.4f} '
+            # f'Loss_EG: {total_loss_eg / i:.4f} '
+            f'Loss_E: {total_loss_g / i:.4f} '
             f'Loss_GIM: {total_loss_gim / i:.4f} '
             f'Time: {datetime.now() - start_epoch_time}'
         )
@@ -465,8 +474,11 @@ def main(config):
             torch.save(D.state_dict(), join(weights_path, f'{epoch:05}_D.pth'))
             torch.save(E.state_dict(), join(weights_path, f'{epoch:05}_E.pth'))
 
-            torch.save(EG_optim.state_dict(),
-                       join(weights_path, f'{epoch:05}_EGo.pth'))
+            torch.save(E_optim.state_dict(),
+                       join(weights_path, f'{epoch:05}_Eo.pth'))
+
+            torch.save(G_optim.state_dict(),
+                       join(weights_path, f'{epoch:05}_Go.pth'))
 
             torch.save(D_optim.state_dict(),
                        join(weights_path, f'{epoch:05}_Do.pth'))
