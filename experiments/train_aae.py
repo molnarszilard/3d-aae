@@ -124,13 +124,15 @@ def main(config):
     # Models
     #
     arch = import_module(f"models.{config['arch']}")
-    G = arch.Generator(config).to(device)
+    # G = arch.Generator(config).to(device)
+    GP = arch.GIM2PCD(config).to(device)
     E = arch.Encoder(config).to(device)
-    D = arch.Discriminator(config).to(device)
+    # D = arch.Discriminator(config).to(device)
 
-    G.apply(weights_init)
+    # G.apply(weights_init)
+    # GP.apply(weights_init)
     E.apply(weights_init)
-    D.apply(weights_init)
+    # D.apply(weights_init)
 
     if config['reconstruction_loss'].lower() == 'chamfer':
         from losses.champfer_loss import ChamferLoss
@@ -149,7 +151,7 @@ def main(config):
     l1_criterion = L1()
     grad_factor = 10.
     normal_factor = 1.
-    gim_factor = 10.
+    gim_factor = 100.
     #
     # Float Tensors
     #
@@ -166,40 +168,49 @@ def main(config):
     # Optimizers
     #
     E_optim = getattr(optim, config['optimizer']['E']['type'])
-    G_optim = getattr(optim, config['optimizer']['G']['type'])
-    D_optim = getattr(optim, config['optimizer']['D']['type'])
+    # G_optim = getattr(optim, config['optimizer']['G']['type'])
+    # GP_optim = getattr(optim, config['optimizer']['G']['type'])
+    # D_optim = getattr(optim, config['optimizer']['D']['type'])
     E_optim = E_optim(E.parameters(),
                         **config['optimizer']['E']['hyperparams'])
-    G_optim = G_optim(G.parameters(),
-                        **config['optimizer']['G']['hyperparams'])
-    D_optim = D_optim(D.parameters(),
-                      **config['optimizer']['D']['hyperparams'])
+    # G_optim = G_optim(G.parameters(),
+    #                     **config['optimizer']['G']['hyperparams'])
+    # GP_optim = GP_optim(GP.parameters(),
+    #                     **config['optimizer']['GP']['hyperparams'])
+    # D_optim = D_optim(D.parameters(),
+    #                   **config['optimizer']['D']['hyperparams'])
 
     if starting_epoch > 1:
-        G.load_state_dict(torch.load(
-            join(weights_path, f'{starting_epoch-1:05}_G.pth')))
+        # G.load_state_dict(torch.load(
+        #     join(weights_path, f'{starting_epoch-1:05}_G.pth')))
+        # GP.load_state_dict(torch.load(
+        #     join(weights_path, f'{starting_epoch-1:05}_GP.pth')))
         E.load_state_dict(torch.load(
             join(weights_path, f'{starting_epoch-1:05}_E.pth')))
-        D.load_state_dict(torch.load(
-            join(weights_path, f'{starting_epoch-1:05}_D.pth')))
+        # D.load_state_dict(torch.load(
+        #     join(weights_path, f'{starting_epoch-1:05}_D.pth')))
 
-        D_optim.load_state_dict(torch.load(
-            join(weights_path, f'{starting_epoch-1:05}_Do.pth')))
+        # D_optim.load_state_dict(torch.load(
+        #     join(weights_path, f'{starting_epoch-1:05}_Do.pth')))
 
         E_optim.load_state_dict(torch.load(
             join(weights_path, f'{starting_epoch-1:05}_Eo.pth')))
-        G_optim.load_state_dict(torch.load(
-            join(weights_path, f'{starting_epoch-1:05}_Go.pth')))
+        # G_optim.load_state_dict(torch.load(
+        #     join(weights_path, f'{starting_epoch-1:05}_Go.pth')))
+        # GP_optim.load_state_dict(torch.load(
+        #     join(weights_path, f'{starting_epoch-1:05}_GPo.pth')))
 
     for epoch in range(starting_epoch, config['max_epochs'] + 1):
         start_epoch_time = datetime.now()
 
-        G.train()
+        # G.train()
+        GP.train()
         E.train()
-        D.train()
+        # D.train()
 
         total_loss_d = 0.0
         total_loss_g = 0.0
+        total_loss_gp = 0.0
         # total_loss_e = 0.0
         total_loss_gim = 0.0
         for i, point_data in enumerate(points_dataloader, 1):
@@ -215,8 +226,8 @@ def main(config):
             # EG part of training
             gim_pcd = E(pcdgt)
             # pcd_reco = G(gim_pcd)
-            pcd_gim = G(gimgt)            
-            gim_reco = E(pcd_gim)
+            pcd_reco = GP(gim_pcd)            
+            gim_reco = E(pcd_reco)
             if dataset_name == 'modelnet':
                 # depth_loss = depth_criterion(gim_pcd, gimgt)
                 # grad_real, grad_fake = imgrad_yx(gimgt), imgrad_yx(gim_pcd)
@@ -234,7 +245,7 @@ def main(config):
                 gimloss1 = gloss_rmselog1 + gloss_l1_1
                 # gimloss2 = gloss_rmselog2 + gloss_l1_2
                 # gimloss3 = gloss_rmselog3 + gloss_l1_3
-                loss_gim = gimloss1# + gimloss2 + gimloss3
+                loss_gim = gimloss1# + gimloss2# + gimloss3
                 loss_gim*=gim_factor
                 # print(f'GL_rmse1: {gloss_rmselog1:.4f} '
                 #       f'GL_l1: {gloss_l1_1: .4f} '
@@ -255,9 +266,9 @@ def main(config):
                 reco_logit = D(gim_reco)
                 # real_logit = D(noise)
                 loss_d = (2*torch.mean(gt_logit) - torch.mean(synth_logit)- torch.mean(reco_logit))
-                loss_kl1 = torch.nn.KLDivLoss(size_average=False)(gimgt.log(),gim_pcd.log())
-                loss_kl2 = torch.nn.KLDivLoss(size_average=False)(gimgt.log(),gim_reco.log())
-                loss_d+=loss_kl1 + loss_kl2
+                # loss_kl1 = torch.nn.KLDivLoss(size_average=False)(gimgt.log(),gim_pcd.log())
+                # loss_kl2 = torch.nn.KLDivLoss(size_average=False)(gimgt.log(),gim_reco.log())
+                # loss_d+=loss_kl1 + loss_kl2
                 alpha = torch.rand(config['batch_size'], 3,config['latent_image_height'], config['latent_image_width']).to(device)
                 # alpha = torch.rand(config['batch_size'], config['z_size']).to(device)
                 differences_reco = gim_reco - noise
@@ -287,7 +298,7 @@ def main(config):
                 gradient_penaltyreco = ((slopesreco - 1) ** 2).mean()
                 loss_gp = torch.sqrt(config['gp_lambda'] * (gradient_penalty+gradient_penaltyreco))
                 ###
-                # loss_d += loss_gp
+                loss_d += loss_gp
                 # loss_kl = torch.nn.KLDivLoss(size_average=False)(gimgt,gim_pcd)
                 # loss_d += loss_kl 
                 # loss_d *= 100.0
@@ -299,11 +310,25 @@ def main(config):
                 D_optim.step()
 
             
-
-            loss_cd1 = torch.sum(
+            
+            # pcd_gim = gim_pcd.view(-1,3,128*128)
+            # pcd_gim = GP(gim_pcd)
+            # print(pcdgt.shape)
+            # print(pcd_gim.shape)
+            # print("min:")
+            # print(pcdgt.min())
+            # print(pcd_gim.min())
+            # print("max:")
+            # print(pcdgt.max())
+            # print(pcd_gim.max())
+            loss_cd = torch.sum(
                 config['reconstruction_coef'] *
                 reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
-                                    pcd_gim.permute(0, 2, 1) + 0.5))
+                                    pcd_reco.permute(0, 2, 1) + 0.5))
+            # loss_cd1 = torch.sum(
+            #     config['reconstruction_coef'] *
+            #     reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
+            #                         pcd_gim.permute(0, 2, 1) + 0.5))
             # loss_cd2 = torch.sum(
             #     config['reconstruction_coef'] *
             #     reconstruction_loss(pcd_gim.permute(0, 2, 1) + 0.5,
@@ -312,7 +337,7 @@ def main(config):
             #     config['reconstruction_coef'] *
             #     reconstruction_loss(pcdgt.permute(0, 2, 1) + 0.5,
             #                         pcd_reco.permute(0, 2, 1) + 0.5))
-            loss_g = loss_cd1# + loss_cd2 + loss_cd3
+            # loss_g = loss_cd# + loss_cd2 + loss_cd3
             # print(  f'CDL1: {loss_cd1:.4f} '
             #         f'CDL2: {loss_cd2: .4f} '
             #         f'CDL3: {loss_cd3:.4f} ')
@@ -325,35 +350,44 @@ def main(config):
             #     loss_eg = loss_e + loss_gim
 
             # total_loss_e += loss_e.item()
-            total_loss_g += loss_g
+            # total_loss_g += loss_g
+            loss_egp =loss_gim + loss_cd
             total_loss_gim += loss_gim
+            total_loss_gp += loss_cd
 
-            E_optim.zero_grad()
+            E_optim.zero_grad()            
             E.zero_grad() 
-            loss_gim.backward()            
+            loss_egp.backward()        
             E_optim.step()
 
-            G_optim.zero_grad()
-            G.zero_grad()
-            loss_g.backward()
-            G_optim.step()
+            # GP_optim.zero_grad()
+            # GP.zero_grad()
+            # loss_cd.backward() 
+            # GP_optim.step()
+
+            # G_optim.zero_grad()
+            # G.zero_grad()
+            # loss_g.backward()
+            # G_optim.step()
 
 
             if useD:
                 print(f'[{epoch}: ({i})] '
-                      f'Loss_D: {loss_d:.4f} '
-                      f'(Loss_GP: {loss_gp: .4f}) '
+                    #   f'Loss_D: {loss_d:.4f} '
+                    #   f'(Loss_GP: {loss_gp: .4f}) '
                     #   f'(Loss_KL: {loss_kl: .4f}) '
                     #   f'Loss_EG: {loss_g:.4f} '
-                      f'(Loss_E: {loss_g: .4f}) '
+                    #   f'(Loss_E: {loss_g: .4f}) '
                     #   f'(Loss_G: {loss_g: .4f}) '
                       f'(Loss_GIM: {loss_gim: .4f}) '
+                      f'(Loss_GP: {loss_cd: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
             else:
                 print(f'[{epoch}: ({i})] '
-                      f'Loss_G: {loss_g:.4f} '
+                    #   f'Loss_G: {loss_g:.4f} '
                     #   f'(Loss_E: {loss_e: .4f}) '
                       f'(Loss_GIM: {loss_gim: .4f}) '
+                      f'(Loss_GP: {loss_cd: .4f}) '
                       f'Time: {datetime.now() - start_epoch_time}')
 
             
@@ -362,26 +396,28 @@ def main(config):
             f'[{epoch}/{config["max_epochs"]}] '
             # f'Loss_D: {total_loss_d / i:.4f} '
             # f'Loss_EG: {total_loss_eg / i:.4f} '
-            f'Loss_E: {total_loss_g / i:.4f} '
+            # f'Loss_E: {total_loss_g / i:.4f} '
             f'Loss_GIM: {total_loss_gim / i:.4f} '
+            f'Loss_GP: {total_loss_gp / i:.4f} '
             f'Time: {datetime.now() - start_epoch_time}'
         )
 
         #
         # Save intermediate results
         #
-        G.eval()
+        # G.eval()
+        GP.eval()
         E.eval()
-        D.eval()
+        # D.eval()
         with torch.no_grad():
             # fake = G(fixed_noise).data.cpu().numpy()
             gim_pcd = E(pcdgt)
-            pcd_reco = G(gim_pcd)
-            pcd_gim = G(gimgt)
+            # pcd_reco = G(gim_pcd)
+            pcd_reco = GP(gimgt)
             # print(pcdgt.shape)
             # print(pcd_reco.shape)
             # print(pcd_gim.shape)
-            gim_reco = E(pcd_gim)   
+            # gim_reco = E(pcd_reco)   
         
         #save gim gt
         for k in range(5):
@@ -400,12 +436,12 @@ def main(config):
             cv2.imwrite(path,gim_pcdnp)
         
         #save gim reconstruction from gimgt
-        for k in range(5):
-            gim_reconp=gim_reco[k].cpu().detach().numpy()
-            gim_reconp=gim_reconp*255
-            gim_reconp = np.moveaxis(gim_reconp,0,-1)
-            path = join(results_dir, 'samples', f'{epoch:05}_{k}_gim_reco.png')
-            cv2.imwrite(path,gim_reconp)
+        # for k in range(5):
+        #     gim_reconp=gim_reco[k].cpu().detach().numpy()
+        #     gim_reconp=gim_reconp*255
+        #     gim_reconp = np.moveaxis(gim_reconp,0,-1)
+        #     path = join(results_dir, 'samples', f'{epoch:05}_{k}_gim_reco.png')
+        #     cv2.imwrite(path,gim_reconp)
 
         #save pcd gt
         for k in range(5):
@@ -420,27 +456,27 @@ def main(config):
 
         #save pcd from gim
         for k in range(5):
-            fig = plot_3d_point_cloud(  pcd_gim[k][0].data.cpu().numpy(), 
-                                        pcd_gim[k][1].data.cpu().numpy(), 
-                                        pcd_gim[k][2].data.cpu().numpy(),
-                                        in_u_sphere=True, show=False,
-                                        title=str(epoch))
-            fig.savefig(
-                join(results_dir, 'samples', f'{epoch:05}_{k}_pcd_gim.png'))
-            plt.close(fig)
-
-        #save pcd reconstruction
-        for k in range(5):
             fig = plot_3d_point_cloud(  pcd_reco[k][0].data.cpu().numpy(), 
                                         pcd_reco[k][1].data.cpu().numpy(), 
                                         pcd_reco[k][2].data.cpu().numpy(),
                                         in_u_sphere=True, show=False,
                                         title=str(epoch))
-            fig.savefig(join(results_dir, 'samples', f'{epoch:05}_{k}_pcd_reco.png'))
+            fig.savefig(
+                join(results_dir, 'samples', f'{epoch:05}_{k}_pcd_reco.png'))
             plt.close(fig)
 
+        #save pcd reconstruction
+        # for k in range(5):
+        #     fig = plot_3d_point_cloud(  pcd_reco[k][0].data.cpu().numpy(), 
+        #                                 pcd_reco[k][1].data.cpu().numpy(), 
+        #                                 pcd_reco[k][2].data.cpu().numpy(),
+        #                                 in_u_sphere=True, show=False,
+        #                                 title=str(epoch))
+        #     fig.savefig(join(results_dir, 'samples', f'{epoch:05}_{k}_pcd_reco.png'))
+        #     plt.close(fig)
+
         #generate pcd from gim_pcd, conventional mode
-        if epoch%200==0 and total_loss_gim / i<40:
+        if epoch%200==0 and total_loss_gim / i<1.5*gim_factor:
             for k in range(5):
                 print(f'gim2pcd_{k}')
                 fakepcd=gim2pcd(gim_pcd.cpu().detach().numpy())
@@ -470,18 +506,22 @@ def main(config):
         #     plt.close(fig)
 
         if epoch % config['save_frequency'] == 0:
-            torch.save(G.state_dict(), join(weights_path, f'{epoch:05}_G.pth'))
-            torch.save(D.state_dict(), join(weights_path, f'{epoch:05}_D.pth'))
+            # torch.save(G.state_dict(), join(weights_path, f'{epoch:05}_G.pth'))
+            # torch.save(GP.state_dict(), join(weights_path, f'{epoch:05}_GP.pth'))
+            # torch.save(D.state_dict(), join(weights_path, f'{epoch:05}_D.pth'))
             torch.save(E.state_dict(), join(weights_path, f'{epoch:05}_E.pth'))
 
             torch.save(E_optim.state_dict(),
                        join(weights_path, f'{epoch:05}_Eo.pth'))
 
-            torch.save(G_optim.state_dict(),
-                       join(weights_path, f'{epoch:05}_Go.pth'))
+            # torch.save(G_optim.state_dict(),
+            #            join(weights_path, f'{epoch:05}_Go.pth'))
 
-            torch.save(D_optim.state_dict(),
-                       join(weights_path, f'{epoch:05}_Do.pth'))
+            # torch.save(GP_optim.state_dict(),
+            #            join(weights_path, f'{epoch:05}_GPo.pth'))
+
+            # torch.save(D_optim.state_dict(),
+            #            join(weights_path, f'{epoch:05}_Do.pth'))
 
 
 if __name__ == '__main__':

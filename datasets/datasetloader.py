@@ -29,6 +29,7 @@ class DatasetLoader(data.Dataset):
         pcd = o3d.io.read_point_cloud(path)
         pcd = torch.from_numpy(np.moveaxis(np.array(pcd.points).astype(np.float32),-1,0))
         pathgim=path.replace('ModelNet10_pcd', 'ModelNet10_gim').replace('pcd','png')
+        # print(pathgim)
         gimgt=cv2.imread(pathgim,cv2.IMREAD_UNCHANGED).astype(np.float32)
         # depth_input_mod = np.moveaxis(depth_input,-1,0)
         # gimgt= Compose([Resize((100,100)), ToTensor()])(gimgt)
@@ -41,7 +42,7 @@ class DatasetLoader(data.Dataset):
         gimgt_rgb[1]=gimgt[0]
         gimgt_rgb[2]=gimgt[2]
         pcd = pcd - pcd.min()
-        pcd_normalized = pcd/torch.abs(pcd).max()-0.5
+        pcd_normalized = pcd/torch.abs(pcd).max()
         return pcd_normalized, gimgt_rgb
 
     def __len__(self):
