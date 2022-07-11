@@ -135,9 +135,9 @@ def plot_3d_point_cloud(x, y, z, show=True, show_axis=True, in_u_sphere=False,
     ax.view_init(elev=elev, azim=azim)
 
     if in_u_sphere:
-        ax.set_xlim3d(0.0, 1.0)
-        ax.set_ylim3d(0.0, 1.0)
-        ax.set_zlim3d(0.0, 1.0)
+        ax.set_xlim3d(-0.5, 0.5)
+        ax.set_ylim3d(-0.5, 0.5)
+        ax.set_zlim3d(-0.5, 0.5)
     else:
         # Multiply with 0.7 to squeeze free-space.
         miv = 0.7 * np.min([np.min(x), np.min(y), np.min(z)])
@@ -146,7 +146,7 @@ def plot_3d_point_cloud(x, y, z, show=True, show_axis=True, in_u_sphere=False,
         ax.set_ylim(miv, mav)
         ax.set_zlim(miv, mav)
         plt.tight_layout()
-
+    plt.axis('off')
     if not show_axis:
         plt.axis('off')
 

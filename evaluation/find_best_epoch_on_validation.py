@@ -13,7 +13,9 @@ import pandas as pd
 import torch
 from torch.distributions.beta import Beta
 from torch.utils.data import DataLoader
-
+import sys
+sys.path.append('../')
+sys.path.append('./')
 from datasets.shapenet import ShapeNetDataset
 from metrics.jsd import jsd_between_point_cloud_sets
 from utils.util import cuda_setup, setup_logging
@@ -88,7 +90,8 @@ def main(eval_config):
     #
     # Models
     #
-    arch = import_module(f"model.architectures.{train_config['arch']}")
+    arch = import_module(f"models.{train_config['arch']}")
+    # arch = import_module(f"model.architectures.{train_config['arch']}")
     E = arch.Encoder(train_config).to(device)
     G = arch.Generator(train_config).to(device)
 

@@ -15,20 +15,20 @@ class DatasetLoader(data.Dataset):
         self.root = Path(root)
 
         if train:
-            self.depth_input_paths = [root+'ModelNet10_pcd/train/'+d for d in os.listdir(root+'ModelNet10_pcd/train')]
+            self.depth_input_paths = [root+'ModelNet10_gim_32/train/'+d for d in os.listdir(root+'ModelNet10_gim_32/train')]
             # Randomly choose 50k images without replacement
             # self.rgb_paths = np.random.choice(self.rgb_paths, 4000, False)
         else:
-            self.depth_input_paths = [root+'ModelNet10_pcd/test/'+d for d in os.listdir(root+'ModelNet10_pcd/test/')]
+            self.depth_input_paths = [root+'ModelNet10_gim_32/test/'+d for d in os.listdir(root+'ModelNet10_gim_32/test/')]
             # self.rgb_paths = np.random.choice(self.rgb_paths, 1000, False)
         
         self.length = len(self.depth_input_paths)
             
     def __getitem__(self, index):
-        path = self.depth_input_paths[index]
-        pcd = o3d.io.read_point_cloud(path)
+        pathgim = self.depth_input_paths[index]        
+        pathpcd=pathgim.replace('ModelNet10_gim', 'ModelNet10_pcd').replace('png','pcd')
+        pcd = o3d.io.read_point_cloud(pathpcd)
         pcd = torch.from_numpy(np.moveaxis(np.array(pcd.points).astype(np.float32),-1,0))
-        pathgim=path.replace('ModelNet10_pcd', 'ModelNet10_gim').replace('pcd','png')
         # print(pathgim)
         gimgt=cv2.imread(pathgim,cv2.IMREAD_UNCHANGED).astype(np.float32)
         # depth_input_mod = np.moveaxis(depth_input,-1,0)
